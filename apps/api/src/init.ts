@@ -11,7 +11,12 @@ async function main() {
     const admin = await db.admin.findFirst();
     if (!admin)
       await db.admin.create({
-        data: { username, passwordHash: hashPassword(password) },
+        data: {
+          username,
+          displayName: username,
+          passwordHash: hashPassword(password),
+          role: "owner",
+        },
       });
     await db.profile.upsert({
       where: { id: 1 },

@@ -144,6 +144,7 @@ export function EntryCard({ entry }: { entry: Entry }) {
       <div className={s.cardMeta}>
         {entry.occurredOn.replaceAll("-", ".")}{" "}
         <span>{entry.kind === "event" ? "特别的一天" : "日常碎片"}</span>
+        {entry.author ? <span> · {entry.author.displayName} 记录</span> : null}
       </div>
       <h3>{entry.title}</h3>
       <p>
@@ -346,6 +347,7 @@ export function StoryView({
       <div className={s.storyMeta}>
         {entry.occurredOn.replaceAll("-", ".")} <span>·</span>{" "}
         {entry.kind === "event" ? "特别的一天" : "日常碎片"}{" "}
+        {entry.author ? <span>· {entry.author.displayName} 记录</span> : null}{" "}
         {p?.birthday && age(p.birthday, entry.occurredOn) && (
           <span>· {age(p.birthday, entry.occurredOn)}的啵啵</span>
         )}

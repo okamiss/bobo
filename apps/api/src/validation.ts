@@ -57,3 +57,21 @@ export const uploadInput = z
     "文件超过大小限制",
   );
 export const visible = { status: "published", visibility: "public" };
+
+const username = z
+  .string()
+  .trim()
+  .min(2, "用户名至少 2 个字符")
+  .max(50)
+  .regex(/^[\p{L}\p{N}._-]+$/u, "用户名只能包含文字、数字、点、横线或下划线");
+
+export const accountInput = z.object({
+  username,
+  displayName: z.string().trim().min(1, "显示名字不能为空").max(30),
+  password: z.string().min(12, "密码至少 12 位").max(200),
+});
+
+export const accountStatusInput = z.object({ active: z.boolean() });
+export const accountNameInput = z.object({
+  displayName: z.string().trim().min(1, "显示名字不能为空").max(30),
+});

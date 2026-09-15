@@ -23,10 +23,21 @@ export type Entry = {
   milestone: boolean;
   featured: boolean;
   coverMediaId: string | null;
+  author: { displayName: string } | null;
   media: Media[];
   previous?: { id: string; title: string };
   next?: { id: string; title: string };
   uploads?: { id: string; name: string; state: string }[];
+};
+export type AuthUser = {
+  id: string;
+  username: string;
+  displayName: string;
+  role: "owner" | "member";
+};
+export type Account = AuthUser & {
+  active: boolean;
+  entryCount: number;
 };
 export type Profile = {
   siteName: string;

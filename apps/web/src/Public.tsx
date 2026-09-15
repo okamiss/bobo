@@ -447,6 +447,11 @@ function Timeline() {
                         {e.milestone ? "✳ 一个成长里程碑" : "生活碎片"}
                       </span>
                       <h3>{e.title}</h3>
+                      {e.author ? (
+                        <small className={s.entryAuthor}>
+                          由 {e.author.displayName} 记录
+                        </small>
+                      ) : null}
                       <p>{e.body.replace(/[#>*]/g, "").slice(0, 130)}</p>
                       <div className={s.tags}>
                         {e.tags.map((t) => (

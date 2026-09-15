@@ -9,6 +9,7 @@
     "build": "npm run build --workspace @bobo/api && npm run build --workspace @bobo/web",
     "typecheck": "npm run typecheck --workspaces",
     "test": "node --test tests/unit.test.mjs",
+    "test:accounts": "node tests/accounts.integration.mjs",
     "test:integration": "node tests/integration.mjs",
     "test:oss": "node tests/oss.integration.mjs"
   },

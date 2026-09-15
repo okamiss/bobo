@@ -1,85 +1,102 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "postgresql"
-  url = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
+
 model Admin {
-  id String @id @default(uuid())
-  username String @unique
+  id           String    @id @default(uuid())
+  username     String    @unique
+  displayName  String
   passwordHash String
-  sessions Session[]
+  role         String    @default("member")
+  active       Boolean   @default(true)
+  sessions     Session[]
+  entries      Entry[]
 }
+
 model Session {
-  id String @id
-  adminId String
-  admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  id        String   @id
+  adminId   String
+  admin     Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
   expiresAt DateTime
 }
+
 model Profile {
-  id Int @id @default(1)
-  siteName String @default("啵啵的小日子")
-  name String @default("啵啵")
-  breed String @default("雪纳瑞")
-  birthday String?
-  homeDate String?
-  intro String @default("把每一次长大，都好好收藏。")
-  personality String @default("")
-  hobbies String @default("")
+  id           Int     @id @default(1)
+  siteName     String  @default("啵啵的小日子")
+  name         String  @default("啵啵")
+  breed        String  @default("雪纳瑞")
+  birthday     String?
+  homeDate     String?
+  intro        String  @default("把每一次长大，都好好收藏。")
+  personality  String  @default("")
+  hobbies      String  @default("")
   coverMediaId String?
 }
+
 model Entry {
-  id String @id @default(uuid())
-  title String
-  occurredOn String
-  kind String @default("daily")
-  body String @default("")
-  tags String[] @default([])
-  status String @default("draft")
-  visibility String @default("private")
-  milestone Boolean @default(false)
-  featured Boolean @default(false)
+  id           String    @id @default(uuid())
+  title        String
+  occurredOn   String
+  kind         String    @default("daily")
+  body         String    @default("")
+  tags         String[]  @default([])
+  status       String    @default("draft")
+  visibility   String    @default("private")
+  milestone    Boolean   @default(false)
+  featured     Boolean   @default(false)
   coverMediaId String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  publishedAt DateTime?
-  media Media[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  publishedAt  DateTime?
+  authorId     String?
+  author       Admin?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  media        Media[]
+
   @@index([status, visibility, occurredOn, id])
+  @@index([authorId])
 }
+
 model Media {
-  id String @id @default(uuid())
-  entryId String
-  entry Entry @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  name String
-  mime String
-  size Int
-  kind String
-  state String @default("pending")
-  attached Boolean @default(false)
-  key String @unique
-  width Int?
-  height Int?
-  duration Float?
-  caption String @default("")
-  position Int @default(0)
-  createdAt DateTime @default(now())
-  items AlbumItem[]
+  id        String      @id @default(uuid())
+  entryId   String
+  entry     Entry       @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  name      String
+  mime      String
+  size      Int
+  kind      String
+  state     String      @default("pending")
+  attached  Boolean     @default(false)
+  key       String      @unique
+  width     Int?
+  height    Int?
+  duration  Float?
+  caption   String      @default("")
+  position  Int         @default(0)
+  createdAt DateTime    @default(now())
+  items     AlbumItem[]
 }
+
 model Album {
-  id String @id @default(uuid())
-  title String
-  description String @default("")
-  visibility String @default("private")
+  id           String      @id @default(uuid())
+  title        String
+  description  String      @default("")
+  visibility   String      @default("private")
   coverMediaId String?
-  createdAt DateTime @default(now())
-  items AlbumItem[]
+  createdAt    DateTime    @default(now())
+  items        AlbumItem[]
 }
+
 model AlbumItem {
-  albumId String
-  mediaId String
-  position Int @default(0)
-  album Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
-  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  albumId  String
+  mediaId  String
+  position Int    @default(0)
+  album    Album  @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  media    Media  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
   @@id([albumId, mediaId])
 }

@@ -6,6 +6,7 @@ import {
   Checkbox,
   ConfigProvider,
   Input,
+  Modal,
   Popconfirm,
   Progress,
   Select,
@@ -43,6 +44,7 @@ import {
   ArrowDown,
   Settings,
   Feather,
+  Users,
 } from "lucide-react";
 import {
   api,
@@ -55,6 +57,8 @@ import {
   type Media,
   type Listing,
   type Album,
+  type AuthUser,
+  type Account,
 } from "./lib";
 import s from "./App.module.css";
 import {
@@ -147,7 +151,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
           </Button>
         </form>
         <small>
-          <Lock size={13} /> 只有手账主人可以编辑
+          <Lock size={13} /> 只有受邀的家人可以编辑
         </small>
       </div>
     </div>
@@ -155,11 +159,11 @@ function Login({ onLogin }: { onLogin: () => void }) {
 }
 
 function AdminContent() {
-  const [user, setUser] = useState<string | null | undefined>();
+  const [user, setUser] = useState<AuthUser | null | undefined>();
   const p = useData<Profile>("/profile");
   const check = () =>
-    api("/auth/me")
-      .then((d) => setUser(d.username))
+    api<AuthUser>("/auth/me")
+      .then(setUser)
       .catch(() => setUser(null));
   useEffect(() => {
     check();
@@ -186,6 +190,11 @@ function AdminContent() {
             <NavLink to="/admin/settings">
               <Settings size={18} /> 啵啵与网站
             </NavLink>
+            {user.role === "owner" ? (
+              <NavLink to="/admin/accounts">
+                <Users size={18} /> 家庭账号
+              </NavLink>
+            ) : null}
           </nav>
           <div className={s.sidebarBottom}>
             <Link to="/" className={s.textLink}>
@@ -207,7 +216,7 @@ function AdminContent() {
           <div className={s.adminTop}>
             每一次记录，都是一份爱的存档。
             <span>
-              <span className={s.onlineDot} /> {user}
+              <span className={s.onlineDot} /> {user.displayName}
             </span>
           </div>
           <Routes>
@@ -219,6 +228,12 @@ function AdminContent() {
               path="settings"
               element={<ProfileEditor refresh={p.reload} />}
             />
+            {user.role === "owner" ? (
+              <Route
+                path="accounts"
+                element={<AccountManager onChanged={check} />}
+              />
+            ) : null}
             <Route path="*" element={<Empty title="没有这一页" />} />
           </Routes>
         </main>
@@ -297,6 +312,7 @@ function AdminEntries() {
                   <small>
                     {e.occurredOn} · {e.media.length} 个媒体{" "}
                     {e.milestone ? "· 里程碑" : ""}
+                    {e.author ? ` · ${e.author.displayName} 记录` : ""}
                   </small>
                 </Link>
                 <Tag
@@ -1040,6 +1056,238 @@ function AlbumEditor() {
           </div>
         )}
       </div>
+    </>
+  );
+}
+
+function AccountManager({
+  onChanged,
+}: {
+  onChanged: () => void | Promise<void>;
+}) {
+  const { data, error, reload } = useData<Account[]>("/admin/accounts");
+  const [notice, setNotice] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<Account | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
+
+  return (
+    <>
+      <AdminHeading
+        title="家庭账号"
+        text="邀请家人一起记录，每篇故事都会留下记录人的名字。"
+      />
+      {notice ? (
+        <Alert type={notice.type} showIcon message={notice.text} />
+      ) : null}
+      <div className={s.accountLayout}>
+        <form
+          className={`${s.panel} ${s.accountForm}`}
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setBusy(true);
+            setNotice(null);
+            const form = event.currentTarget;
+            const value = Object.fromEntries(new FormData(form));
+            try {
+              await api("/admin/accounts", json("POST", value));
+              form.reset();
+              reload();
+              setNotice({ type: "success", text: "家庭成员账号已创建。" });
+            } catch (e: any) {
+              setNotice({ type: "error", text: e.message });
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <h3>添加家庭成员</h3>
+          <p className={s.hint}>
+            用户名用于登录，显示名字会出现在对外公开的故事中。
+          </p>
+          <label>
+            显示名字
+            <Input
+              required
+              name="displayName"
+              maxLength={30}
+              placeholder="例如：妈妈"
+              autoComplete="off"
+            />
+          </label>
+          <label>
+            登录用户名
+            <Input
+              required
+              name="username"
+              minLength={2}
+              maxLength={50}
+              placeholder="例如：mama"
+              autoComplete="off"
+            />
+          </label>
+          <label>
+            初始密码
+            <Input.Password
+              required
+              name="password"
+              minLength={12}
+              maxLength={200}
+              placeholder="至少 12 位"
+              autoComplete="new-password"
+            />
+          </label>
+          <Button type="primary" htmlType="submit" loading={busy} block>
+            创建账号
+          </Button>
+        </form>
+        <section className={`${s.panel} ${s.accountList}`}>
+          <h3>家庭成员</h3>
+          {error ? (
+            <Status error={error} />
+          ) : !data ? (
+            <Status loading />
+          ) : (
+            data.map((account) => (
+              <div className={s.accountRow} key={account.id}>
+                <Users size={20} />
+                <div className={s.accountIdentity}>
+                  <strong>{account.displayName}</strong>
+                  <small>
+                    @{account.username} · {account.entryCount} 篇记录
+                  </small>
+                </div>
+                <div className={s.accountTags}>
+                  {account.role === "owner" ? (
+                    <Tag color="gold">家庭管理员</Tag>
+                  ) : (
+                    <Tag>家庭成员</Tag>
+                  )}
+                  <Tag color={account.active ? "green" : "default"}>
+                    {account.active ? "可登录" : "已停用"}
+                  </Tag>
+                </div>
+                <div className={s.accountActions}>
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      setEditing(account);
+                      setEditingName(account.displayName);
+                    }}
+                  >
+                    修改名字
+                  </Button>
+                  {account.role !== "owner" ? (
+                    <>
+                      <Popconfirm
+                        title={
+                          account.active ? "停用这个账号？" : "启用这个账号？"
+                        }
+                        description={
+                          account.active
+                            ? "停用后会立即退出登录，已有故事署名仍会保留。"
+                            : "启用后，家庭成员可以再次登录。"
+                        }
+                        okText={account.active ? "停用" : "启用"}
+                        cancelText="取消"
+                        onConfirm={async () => {
+                          try {
+                            await api(
+                              `/admin/accounts/${account.id}/status`,
+                              json("PUT", { active: !account.active }),
+                            );
+                            reload();
+                            setNotice({
+                              type: "success",
+                              text: account.active
+                                ? `${account.displayName}的账号已停用。`
+                                : `${account.displayName}的账号已启用。`,
+                            });
+                          } catch (e: any) {
+                            setNotice({ type: "error", text: e.message });
+                          }
+                        }}
+                      >
+                        <Button size="small">
+                          {account.active ? "停用" : "启用"}
+                        </Button>
+                      </Popconfirm>
+                      {account.entryCount === 0 ? (
+                        <Popconfirm
+                          title="删除这个账号？"
+                          description="没有发布记录的成员账号可以直接删除。"
+                          okText="删除"
+                          cancelText="取消"
+                          okButtonProps={{ danger: true }}
+                          onConfirm={async () => {
+                            try {
+                              await api(
+                                `/admin/accounts/${account.id}`,
+                                json("DELETE"),
+                              );
+                              reload();
+                              setNotice({
+                                type: "success",
+                                text: "成员账号已删除。",
+                              });
+                            } catch (e: any) {
+                              setNotice({ type: "error", text: e.message });
+                            }
+                          }}
+                        >
+                          <Button size="small" danger>
+                            删除
+                          </Button>
+                        </Popconfirm>
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            ))
+          )}
+        </section>
+      </div>
+      <Modal
+        title={`修改${editing ? `「${editing.displayName}」` : ""}的显示名字`}
+        open={editing !== null}
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={editBusy}
+        onCancel={() => setEditing(null)}
+        onOk={async () => {
+          if (!editing) return;
+          setEditBusy(true);
+          try {
+            await api(
+              `/admin/accounts/${editing.id}/name`,
+              json("PUT", { displayName: editingName }),
+            );
+            reload();
+            await onChanged();
+            setNotice({ type: "success", text: "显示名字已更新。" });
+            setEditing(null);
+          } catch (e: any) {
+            setNotice({ type: "error", text: e.message });
+          } finally {
+            setEditBusy(false);
+          }
+        }}
+      >
+        <label className={s.modalField}>
+          对外显示名字
+          <Input
+            value={editingName}
+            maxLength={30}
+            autoFocus
+            onChange={(event) => setEditingName(event.target.value)}
+          />
+        </label>
+      </Modal>
     </>
   );
 }

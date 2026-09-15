@@ -17,6 +17,8 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
+  ForbiddenException,
+  ConflictException,
   BadRequestException,
   NotFoundException,
   Catch,
@@ -30,7 +32,7 @@ import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
 import { randomBytes } from "node:crypto";
 import { z, ZodError } from "zod";
-import { config, sign, checkPassword } from "./config";
+import { config, sign, checkPassword, hashPassword } from "./config";
 import { db, MediaService, mediaOrder } from "./media";
 import {
   entryInput,
@@ -39,6 +41,9 @@ import {
   uploadInput,
   visible,
   date,
+  accountInput,
+  accountStatusInput,
+  accountNameInput,
 } from "./validation";
 const idSchema = z.string().uuid();
 async function session(req: Request) {
@@ -46,13 +51,37 @@ async function session(req: Request) {
   if (!token) return null;
   return db.session.findFirst({
     where: { id: sign(token), expiresAt: { gt: new Date() } },
+    include: { admin: true },
   });
+}
+async function currentAdmin(req: Request) {
+  const value = await session(req);
+  if (!value?.admin.active) throw new UnauthorizedException("请先登录");
+  return value.admin;
+}
+async function owner(req: Request) {
+  const admin = await currentAdmin(req);
+  if (admin.role !== "owner")
+    throw new ForbiddenException("只有家庭管理员可以管理账号");
+  return admin;
+}
+function authUser(admin: {
+  id: string;
+  username: string;
+  displayName: string;
+  role: string;
+}) {
+  return {
+    id: admin.id,
+    username: admin.username,
+    displayName: admin.displayName,
+    role: admin.role,
+  };
 }
 @Injectable()
 class AdminGuard implements CanActivate {
   async canActivate(ctx: ExecutionContext) {
-    if (!(await session(ctx.switchToHttp().getRequest())))
-      throw new UnauthorizedException("请先登录");
+    await currentAdmin(ctx.switchToHttp().getRequest());
     return true;
   }
 }
@@ -131,6 +160,7 @@ class Content {
         skip: (q.page - 1) * q.limit,
         take: q.limit,
         include: {
+          author: { select: { displayName: true } },
           media: {
             orderBy: mediaOrder,
             where: admin ? {} : { attached: true },
@@ -158,6 +188,7 @@ class Content {
     const entry = await db.entry.findFirst({
       where: { id, ...(admin ? {} : visible) },
       include: {
+        author: { select: { displayName: true } },
         media: { orderBy: mediaOrder, where: admin ? {} : { attached: true } },
       },
     });
@@ -292,7 +323,7 @@ class PublicController {
     const admin = await db.admin.findUnique({
       where: { username: v.username },
     });
-    if (!admin || !checkPassword(v.password, admin.passwordHash))
+    if (!admin?.active || !checkPassword(v.password, admin.passwordHash))
       throw new UnauthorizedException("用户名或密码不正确");
     const token = randomBytes(32).toString("hex");
     await db.session.deleteMany({ where: { expiresAt: { lt: new Date() } } });
@@ -310,15 +341,10 @@ class PublicController {
       path: "/",
       maxAge: 7 * 86400000,
     });
-    return { username: admin.username };
+    return authUser(admin);
   }
   @Get("auth/me") async me(@Req() req: Request) {
-    const s = await session(req);
-    if (!s) throw new UnauthorizedException("请先登录");
-    return {
-      username: (await db.admin.findUniqueOrThrow({ where: { id: s.adminId } }))
-        .username,
-    };
+    return authUser(await currentAdmin(req));
   }
   @Post("auth/logout") async logout(
     @Req() req: Request,
@@ -344,17 +370,104 @@ class AdminController {
     private readonly content: Content,
     private readonly media: MediaService,
   ) {}
+  @Get("accounts") async accounts(@Req() req: Request) {
+    await owner(req);
+    const accounts = await db.admin.findMany({
+      orderBy: [{ role: "desc" }, { displayName: "asc" }],
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        role: true,
+        active: true,
+        _count: { select: { entries: true } },
+      },
+    });
+    return accounts.map(({ _count, ...account }) => ({
+      ...account,
+      entryCount: _count.entries,
+    }));
+  }
+  @Post("accounts") async createAccount(
+    @Req() req: Request,
+    @Body() body: unknown,
+  ) {
+    await owner(req);
+    const value = accountInput.parse(body);
+    try {
+      const account = await db.admin.create({
+        data: {
+          username: value.username,
+          displayName: value.displayName,
+          passwordHash: hashPassword(value.password),
+        },
+      });
+      return { ...authUser(account), active: account.active, entryCount: 0 };
+    } catch (error: any) {
+      if (error.code === "P2002")
+        throw new ConflictException("这个用户名已经被使用");
+      throw error;
+    }
+  }
+  @Put("accounts/:id/status") async setAccountStatus(
+    @Req() req: Request,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    await owner(req);
+    idSchema.parse(id);
+    const value = accountStatusInput.parse(body);
+    const target = await db.admin.findUniqueOrThrow({ where: { id } });
+    if (target.role === "owner")
+      throw new BadRequestException("家庭管理员账号不能停用");
+    const account = await db.admin.update({
+      where: { id },
+      data: { active: value.active },
+    });
+    if (!value.active) await db.session.deleteMany({ where: { adminId: id } });
+    return { ...authUser(account), active: account.active };
+  }
+  @Put("accounts/:id/name") async setAccountName(
+    @Req() req: Request,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    await owner(req);
+    idSchema.parse(id);
+    const value = accountNameInput.parse(body);
+    const account = await db.admin.update({ where: { id }, data: value });
+    return { ...authUser(account), active: account.active };
+  }
+  @Delete("accounts/:id") async removeAccount(
+    @Req() req: Request,
+    @Param("id") id: string,
+  ) {
+    await owner(req);
+    idSchema.parse(id);
+    const target = await db.admin.findUniqueOrThrow({
+      where: { id },
+      include: { _count: { select: { entries: true } } },
+    });
+    if (target.role === "owner")
+      throw new BadRequestException("家庭管理员账号不能删除");
+    if (target._count.entries)
+      throw new BadRequestException("这个账号已有记录，请改为停用以保留署名");
+    await db.admin.delete({ where: { id } });
+    return { ok: true };
+  }
   @Get("entries") entries(@Query() q: any) {
     return this.content.list(q, true);
   }
   @Get("entries/:id") entry(@Param("id") id: string) {
     return this.content.get(id, true);
   }
-  @Post("entries") async create(@Body() body: unknown) {
+  @Post("entries") async create(@Req() req: Request, @Body() body: unknown) {
     const v = z.object({ occurredOn: date.optional() }).parse(body);
+    const admin = await currentAdmin(req);
     return db.entry.create({
       data: {
         title: "未命名的日子",
+        authorId: admin.id,
         occurredOn:
           v.occurredOn ||
           new Intl.DateTimeFormat("en-CA", {
@@ -364,6 +477,7 @@ class AdminController {
     });
   }
   @Put("entries/:id") async save(
+    @Req() req: Request,
     @Param("id") id: string,
     @Body() body: unknown,
   ) {
@@ -398,12 +512,17 @@ class AdminController {
       existing.media.some((m) => m.state !== "ready")
     )
       throw new BadRequestException("请完成或移除未成功的上传后再发布");
+    const publisher = await currentAdmin(req);
     await db.$transaction(async (tx) => {
       await tx.entry.update({
         where: { id },
         data: {
           ...data,
           tags: [...new Set(data.tags)],
+          authorId:
+            existing.status !== "published" && data.status === "published"
+              ? publisher.id
+              : existing.authorId,
           publishedAt:
             data.status === "published"
               ? existing.publishedAt || new Date()

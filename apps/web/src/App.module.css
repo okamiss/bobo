@@ -909,6 +909,12 @@ hr {
     serif;
   margin-bottom: 10px;
 }
+.entryAuthor {
+  display: block;
+  color: #89927f;
+  font-size: 11px;
+  margin: -3px 0 7px;
+}
 .timelineContent p {
   color: #919480;
   font-size: 12px;
@@ -1468,6 +1474,64 @@ hr {
   padding: 28px;
   border-radius: 7px;
 }
+.accountLayout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.accountForm {
+  display: grid;
+  gap: 18px;
+}
+.accountForm h3,
+.accountList h3 {
+  margin: 0;
+}
+.accountForm .hint {
+  margin: -7px 0 0;
+}
+.accountForm label {
+  display: grid;
+  gap: 7px;
+}
+.accountList {
+  display: grid;
+  gap: 0;
+}
+.accountRow {
+  display: grid;
+  grid-template-columns: 24px minmax(130px, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+.accountRow:last-child {
+  border-bottom: 0;
+}
+.accountIdentity {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.accountIdentity small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.accountTags,
+.accountActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.modalField {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+}
 .editorSettings {
   background: #f0f1e7;
   border: 1px solid #e1e5d5;
@@ -1758,6 +1822,9 @@ hr {
   body {
     overflow-x: hidden;
     padding-bottom: calc(68px + env(safe-area-inset-bottom));
+  }
+  .accountLayout {
+    grid-template-columns: 1fr;
   }
   .site {
     min-width: 0;
@@ -2102,6 +2169,14 @@ hr {
 @media (max-width: 600px) {
   .site {
     padding: 0 18px;
+  }
+  .accountRow {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+  .accountTags,
+  .accountActions {
+    grid-column: 2;
+    justify-content: flex-start;
   }
   .header {
     height: 74px;
