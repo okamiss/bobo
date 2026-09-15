@@ -204,7 +204,12 @@ try {
     2,
   );
   await request(`/admin/media/${unpublished}`, { method: "DELETE" });
-  await save(c, { status: "draft", visibility: "public" });
+  await save(c, {
+    status: "draft",
+    visibility: "public",
+    body: "啵".repeat(50000),
+  });
+  report.push("5 万字中文正文可以完整保存");
   const publicList = (
     await request(
       "/entries?year=2024&tag=%E6%B5%8B%E8%AF%95&q=%E6%B5%8B%E8%AF%95",
@@ -280,6 +285,27 @@ try {
   const retained = (await request(`/admin/entries/${a}`)).data;
   assert.equal(retained.media.length, 2);
   report.push("删除相册保留原始故事和媒体通过");
+  const neighbors = [];
+  for (const occurredOn of ["2024-02-29", "2024-02-29", "2024-03-01"]) {
+    const id = await create();
+    await save(id, { occurredOn, status: "published", visibility: "public" });
+    neighbors.push(id);
+  }
+  const ordered = [];
+  for (let page = 1; ; page++) {
+    const list = (
+      await request(`/entries?limit=50&page=${page}`, { auth: false })
+    ).data;
+    ordered.push(...list.items.map((x) => x.id));
+    if (!list.items.length || ordered.length >= list.total) break;
+  }
+  for (const id of neighbors) {
+    const i = ordered.indexOf(id);
+    const story = (await request(`/entries/${id}`, { auth: false })).data;
+    assert.equal(story.previous?.id ?? null, ordered[i - 1] ?? null);
+    assert.equal(story.next?.id ?? null, ordered[i + 1] ?? null);
+  }
+  report.push("公开故事的上一篇、下一篇与时间线顺序一致");
   if (process.argv.includes("--keep")) {
     writeFileSync(
       "test-results/persistence.json",

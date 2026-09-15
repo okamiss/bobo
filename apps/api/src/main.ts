@@ -63,8 +63,27 @@ async function currentAdmin(req: Request) {
 async function owner(req: Request) {
   const admin = await currentAdmin(req);
   if (admin.role !== "owner")
-    throw new ForbiddenException("只有家庭管理员可以管理账号");
+    throw new ForbiddenException("只有家庭管理员可以进行这项操作");
   return admin;
+}
+async function editableEntry(req: Request, id: string) {
+  idSchema.parse(id);
+  const admin = await currentAdmin(req);
+  const entry = await db.entry.findUnique({
+    where: { id },
+    include: { media: true },
+  });
+  if (!entry) throw new NotFoundException();
+  if (admin.role !== "owner" && entry.authorId !== admin.id)
+    throw new ForbiddenException("只有记录人和家庭管理员可以修改这篇记录");
+  return { admin, entry };
+}
+async function editableMedia(req: Request, id: string) {
+  idSchema.parse(id);
+  const media = await db.media.findUnique({ where: { id } });
+  if (!media) throw new NotFoundException();
+  await editableEntry(req, media.entryId);
+  return media;
 }
 function authUser(admin: {
   id: string;
@@ -194,15 +213,33 @@ class Content {
       },
     });
     if (!entry) throw new NotFoundException("这篇故事暂时没有公开");
-    const ordering = [{ occurredOn: "desc" as const }, { id: "desc" as const }];
-    const neighbors = admin
-      ? []
-      : await db.entry.findMany({
-          where: visible,
-          select: { id: true, title: true, occurredOn: true },
-          orderBy: ordering,
-        });
-    const index = neighbors.findIndex((x) => x.id === id);
+    const select = { id: true, title: true, occurredOn: true };
+    const [previous, next] = admin
+      ? [null, null]
+      : await Promise.all([
+          db.entry.findFirst({
+            where: {
+              ...visible,
+              OR: [
+                { occurredOn: { gt: entry.occurredOn } },
+                { occurredOn: entry.occurredOn, id: { gt: id } },
+              ],
+            },
+            select,
+            orderBy: [{ occurredOn: "asc" }, { id: "asc" }],
+          }),
+          db.entry.findFirst({
+            where: {
+              ...visible,
+              OR: [
+                { occurredOn: { lt: entry.occurredOn } },
+                { occurredOn: entry.occurredOn, id: { lt: id } },
+              ],
+            },
+            select,
+            orderBy: [{ occurredOn: "desc" }, { id: "desc" }],
+          }),
+        ]);
     return {
       ...(await this.present(entry)),
       uploads: admin
@@ -210,8 +247,8 @@ class Content {
             .filter((m) => m.state !== "ready")
             .map((m) => ({ id: m.id, name: m.name, state: m.state }))
         : undefined,
-      previous: neighbors[index - 1] || null,
-      next: neighbors[index + 1] || null,
+      previous,
+      next,
     };
   }
   async profile(admin = false) {
@@ -482,13 +519,8 @@ class AdminController {
     @Param("id") id: string,
     @Body() body: unknown,
   ) {
-    idSchema.parse(id);
+    const { admin, entry: existing } = await editableEntry(req, id);
     const { media, ...data } = entryInput.parse(body);
-    const existing = await db.entry.findUnique({
-      where: { id },
-      include: { media: true },
-    });
-    if (!existing) throw new NotFoundException();
     if (
       data.coverMediaId &&
       !existing.media.some(
@@ -513,17 +545,13 @@ class AdminController {
       existing.media.some((m) => m.state !== "ready")
     )
       throw new BadRequestException("请完成或移除未成功的上传后再发布");
-    const publisher = await currentAdmin(req);
     await db.$transaction(async (tx) => {
       await tx.entry.update({
         where: { id },
         data: {
           ...data,
           tags: [...new Set(data.tags)],
-          authorId:
-            existing.status !== "published" && data.status === "published"
-              ? publisher.id
-              : existing.authorId,
+          authorId: existing.authorId ?? admin.id,
           publishedAt:
             data.status === "published"
               ? existing.publishedAt || new Date()
@@ -539,9 +567,11 @@ class AdminController {
     });
     return this.content.get(id, true);
   }
-  @Delete("entries/:id") async remove(@Param("id") id: string) {
-    idSchema.parse(id);
-    const list = await db.media.findMany({ where: { entryId: id } });
+  @Delete("entries/:id") async remove(
+    @Req() req: Request,
+    @Param("id") id: string,
+  ) {
+    const list = (await editableEntry(req, id)).entry.media;
     if (list.some((m) => ["uploading", "processing"].includes(m.state)))
       throw new BadRequestException("请等待媒体上传或处理完成后删除记录");
     await db.entry.delete({ where: { id } });
@@ -556,7 +586,8 @@ class AdminController {
   @Get("profile") profile() {
     return this.content.profile(true);
   }
-  @Put("profile") async setProfile(@Body() body: unknown) {
+  @Put("profile") async setProfile(@Req() req: Request, @Body() body: unknown) {
+    await owner(req);
     const v = profileInput.parse(body);
     if (
       v.coverMediaId &&
@@ -574,23 +605,33 @@ class AdminController {
     await db.profile.update({ where: { id: 1 }, data: v });
     return this.content.profile(true);
   }
-  @Post("media/authorize") authorize(@Body() body: unknown) {
-    return this.media.authorize(uploadInput.parse(body));
+  @Post("media/authorize") async authorize(
+    @Req() req: Request,
+    @Body() body: unknown,
+  ) {
+    const v = uploadInput.parse(body);
+    await editableEntry(req, v.entryId);
+    return this.media.authorize(v);
   }
-  @Put("media/:id/upload") upload(
+  @Put("media/:id/upload") async upload(
     @Param("id") id: string,
     @Req() req: Request,
   ) {
-    idSchema.parse(id);
+    await editableMedia(req, id);
     return this.media.localUpload(id, req);
   }
-  @Post("media/:id/complete") complete(@Param("id") id: string) {
-    idSchema.parse(id);
+  @Post("media/:id/complete") async complete(
+    @Req() req: Request,
+    @Param("id") id: string,
+  ) {
+    await editableMedia(req, id);
     return this.media.complete(id);
   }
-  @Delete("media/:id") async removeMedia(@Param("id") id: string) {
-    idSchema.parse(id);
-    const m = await db.media.findUniqueOrThrow({ where: { id } });
+  @Delete("media/:id") async removeMedia(
+    @Req() req: Request,
+    @Param("id") id: string,
+  ) {
+    const m = await editableMedia(req, id);
     if (["uploading", "processing"].includes(m.state))
       throw new BadRequestException("请等待文件处理完成");
     await db.media.delete({ where: { id } });
@@ -617,13 +658,16 @@ class AdminController {
   @Get("albums/:id") album(@Param("id") id: string) {
     return this.content.albums(true, id);
   }
-  @Post("albums") async createAlbum() {
+  @Post("albums") async createAlbum(@Req() req: Request) {
+    await owner(req);
     return db.album.create({ data: { title: "新的相册" } });
   }
   @Put("albums/:id") async saveAlbum(
+    @Req() req: Request,
     @Param("id") id: string,
     @Body() body: unknown,
   ) {
+    await owner(req);
     idSchema.parse(id);
     const { mediaIds, ...v } = albumInput.parse(body);
     if (
@@ -647,7 +691,11 @@ class AdminController {
     });
     return this.content.albums(true, id);
   }
-  @Delete("albums/:id") async removeAlbum(@Param("id") id: string) {
+  @Delete("albums/:id") async removeAlbum(
+    @Req() req: Request,
+    @Param("id") id: string,
+  ) {
+    await owner(req);
     idSchema.parse(id);
     await db.album.delete({ where: { id } });
     return { ok: true };
@@ -670,6 +718,8 @@ async function main() {
   });
   // The API is only reachable through Nginx, which sets X-Forwarded-For.
   app.set("trust proxy", 1);
+  // A 50,000-character story body can exceed the 100kb default in UTF-8.
+  app.useBodyParser("json", { limit: "1mb" });
   app.use(
     helmet({
       contentSecurityPolicy: false,

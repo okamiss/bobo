@@ -4,6 +4,7 @@ import {
   useRef,
   createContext,
   useContext,
+  type ImgHTMLAttributes,
   type ReactNode,
 } from "react";
 import { Link, useBlocker } from "react-router";
@@ -115,13 +116,79 @@ export function SectionTitle({
   );
 }
 
+// Signed media URLs expire after 5 minutes. Lazily loaded images and long-open
+// videos can hit an expired URL, so request a fresh one once and retry.
+export function MediaImage({
+  media,
+  variant = "thumb",
+  ...props
+}: { media: Media; variant?: "thumb" | "url" } & Omit<
+  ImgHTMLAttributes<HTMLImageElement>,
+  "src" | "onError"
+>) {
+  const signed = media[variant];
+  const [fresh, setFresh] = useState<{ stale: string; src: string } | null>(
+    null,
+  );
+  const refreshed = fresh !== null && fresh.stale === signed;
+  return (
+    <img
+      {...props}
+      src={refreshed ? fresh.src : signed}
+      onError={() => {
+        if (!refreshed)
+          api<Media>(`/media/${media.id}/access`)
+            .then((m) => setFresh({ stale: signed, src: m[variant] }))
+            .catch(() => {});
+      }}
+    />
+  );
+}
+
+function MediaVideo({ media }: { media: Media }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const [signed, setSigned] = useState(() => ({
+    url: media.url,
+    at: Date.now(),
+  }));
+  return (
+    <video
+      ref={video}
+      src={signed.url}
+      controls
+      poster={media.thumb}
+      tabIndex={0}
+      onError={() => {
+        const v = video.current;
+        // An error soon after loading is a real playback failure, not expiry.
+        if (!v || Date.now() - signed.at < 60000) return;
+        const time = v.currentTime,
+          resume = !v.paused;
+        api<Media>(`/media/${media.id}/access`)
+          .then((m) => {
+            v.addEventListener(
+              "loadedmetadata",
+              () => {
+                v.currentTime = time;
+                if (resume) v.play().catch(() => {});
+              },
+              { once: true },
+            );
+            setSigned({ url: m.url, at: Date.now() });
+          })
+          .catch(() => {});
+      }}
+    />
+  );
+}
+
 export function EntryCard({ entry }: { entry: Entry }) {
   const m = coverOf(entry);
   return (
     <Link to={`/stories/${entry.id}`} className={s.entryCard}>
       <div className={s.cardPhoto}>
         {m ? (
-          <img src={m.thumb} alt={m.caption || entry.title} loading="lazy" />
+          <MediaImage media={m} alt={m.caption || entry.title} loading="lazy" />
         ) : (
           <div className={s.textPhoto}>
             <Feather size={42} />
@@ -275,13 +342,7 @@ export function Lightbox({
         ) : !fresh ? (
           <Status loading />
         ) : m.kind === "video" ? (
-          <video
-            key={m.id}
-            src={fresh.url}
-            controls
-            poster={fresh.thumb}
-            tabIndex={0}
-          />
+          <MediaVideo key={m.id} media={fresh} />
         ) : (
           <img src={fresh.url} alt={m.caption || m.name} />
         )}
@@ -317,7 +378,7 @@ export function MediaGrid({ items }: { items: Media[] }) {
             onClick={() => setIndex(i)}
             aria-label={`查看 ${m.caption || m.name}`}
           >
-            <img src={m.thumb} alt={m.caption || m.name} loading="lazy" />
+            <MediaImage media={m} alt={m.caption || m.name} loading="lazy" />
             {m.kind === "video" && (
               <span className={s.playBadge}>
                 <Play />

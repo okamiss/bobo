@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, createContext, useContext } from "react";
 import {
   Alert,
   App as AntApp,
@@ -68,8 +68,13 @@ import {
   Empty,
   StoryView,
   AdminHeading,
+  MediaImage,
   useUnsaved,
 } from "./shared";
+
+const UserContext = createContext<AuthUser | null>(null);
+const canEdit = (user: AuthUser | null, entry: Entry) =>
+  user?.role === "owner" || (!!user && entry.authorId === user.id);
 
 const adminTheme: ThemeConfig = {
   token: {
@@ -171,74 +176,80 @@ function AdminContent() {
   if (user === undefined) return <Status loading />;
   if (!user) return <Login onLogin={check} />;
   return (
-    <ProfileContext.Provider value={p.data}>
-      <div className={s.adminLayout}>
-        <aside className={s.sidebar}>
-          <Link to="/" className={s.brand}>
-            <PawPrint />
-            <span>
-              啵啵的小日子<small>手账工作室</small>
-            </span>
-          </Link>
-          <nav>
-            <NavLink to="/admin" end>
-              <BookOpen size={18} /> 成长记录
-            </NavLink>
-            <NavLink to="/admin/albums">
-              <ImageIcon size={18} /> 记忆相册
-            </NavLink>
-            <NavLink to="/admin/settings">
-              <Settings size={18} /> 啵啵与网站
-            </NavLink>
-            {user.role === "owner" ? (
-              <NavLink to="/admin/accounts">
-                <Users size={18} /> 家庭账号
-              </NavLink>
-            ) : null}
-          </nav>
-          <div className={s.sidebarBottom}>
-            <Link to="/" className={s.textLink}>
-              看看我的小站 <ArrowUpRight size={15} />
+    <UserContext.Provider value={user}>
+      <ProfileContext.Provider value={p.data}>
+        <div className={s.adminLayout}>
+          <aside className={s.sidebar}>
+            <Link to="/" className={s.brand}>
+              <PawPrint />
+              <span>
+                啵啵的小日子<small>手账工作室</small>
+              </span>
             </Link>
-            <Button
-              type="text"
-              icon={<LogOut size={16} />}
-              onClick={async () => {
-                await api("/auth/logout", json("POST"));
-                setUser(null);
-              }}
-            >
-              退出登录
-            </Button>
-          </div>
-        </aside>
-        <main className={s.adminMain}>
-          <div className={s.adminTop}>
-            每一次记录，都是一份爱的存档。
-            <span>
-              <span className={s.onlineDot} /> {user.displayName}
-            </span>
-          </div>
-          <Routes>
-            <Route index element={<AdminEntries />} />
-            <Route path="entries/:id" element={<EntryEditor />} />
-            <Route path="albums" element={<AdminAlbums />} />
-            <Route path="albums/:id" element={<AlbumEditor />} />
-            <Route
-              path="settings"
-              element={<ProfileEditor refresh={p.reload} />}
-            />
-            {user.role === "owner" ? (
-              <Route
-                path="accounts"
-                element={<AccountManager onChanged={check} />}
-              />
-            ) : null}
-            <Route path="*" element={<Empty title="没有这一页" />} />
-          </Routes>
-        </main>
-      </div>
-    </ProfileContext.Provider>
+            <nav>
+              <NavLink to="/admin" end>
+                <BookOpen size={18} /> 成长记录
+              </NavLink>
+              {user.role === "owner" ? (
+                <>
+                  <NavLink to="/admin/albums">
+                    <ImageIcon size={18} /> 记忆相册
+                  </NavLink>
+                  <NavLink to="/admin/settings">
+                    <Settings size={18} /> 啵啵与网站
+                  </NavLink>
+                  <NavLink to="/admin/accounts">
+                    <Users size={18} /> 家庭账号
+                  </NavLink>
+                </>
+              ) : null}
+            </nav>
+            <div className={s.sidebarBottom}>
+              <Link to="/" className={s.textLink}>
+                看看我的小站 <ArrowUpRight size={15} />
+              </Link>
+              <Button
+                type="text"
+                icon={<LogOut size={16} />}
+                onClick={async () => {
+                  await api("/auth/logout", json("POST"));
+                  setUser(null);
+                }}
+              >
+                退出登录
+              </Button>
+            </div>
+          </aside>
+          <main className={s.adminMain}>
+            <div className={s.adminTop}>
+              每一次记录，都是一份爱的存档。
+              <span>
+                <span className={s.onlineDot} /> {user.displayName}
+              </span>
+            </div>
+            <Routes>
+              <Route index element={<AdminEntries />} />
+              <Route path="entries/:id" element={<EntryEditor />} />
+              {user.role === "owner" ? (
+                <>
+                  <Route path="albums" element={<AdminAlbums />} />
+                  <Route path="albums/:id" element={<AlbumEditor />} />
+                  <Route
+                    path="settings"
+                    element={<ProfileEditor refresh={p.reload} />}
+                  />
+                  <Route
+                    path="accounts"
+                    element={<AccountManager onChanged={check} />}
+                  />
+                </>
+              ) : null}
+              <Route path="*" element={<Empty title="没有这一页" />} />
+            </Routes>
+          </main>
+        </div>
+      </ProfileContext.Provider>
+    </UserContext.Provider>
   );
 }
 
@@ -254,6 +265,7 @@ function Admin() {
 
 function AdminEntries() {
   const nav = useNavigate();
+  const user = useContext(UserContext);
   const [q, setQ] = useSearchParams();
   const { data, error, reload } = useData<Listing>(
     `/admin/entries?limit=12&page=${q.get("page") || 1}`,
@@ -302,7 +314,7 @@ function AdminEntries() {
               <div key={e.id} className={s.adminRow}>
                 <div className={s.adminThumb}>
                   {coverOf(e) ? (
-                    <img src={coverOf(e).thumb} alt="" />
+                    <MediaImage media={coverOf(e)} alt="" />
                   ) : (
                     <Feather size={24} />
                   )}
@@ -331,30 +343,33 @@ function AdminEntries() {
                       : "已公开"}
                 </Tag>
                 <Link to={`/admin/entries/${e.id}`} className={s.textLink}>
-                  编辑 <ArrowUpRight size={15} />
+                  {canEdit(user, e) ? "编辑" : "查看"}{" "}
+                  <ArrowUpRight size={15} />
                 </Link>
-                <Popconfirm
-                  title="删除这篇记录？"
-                  description="记录及其媒体都会删除，此操作不可撤销。"
-                  okText="删除"
-                  cancelText="取消"
-                  okButtonProps={{ danger: true }}
-                  onConfirm={async () => {
-                    try {
-                      await api(`/admin/entries/${e.id}`, json("DELETE"));
-                      reload();
-                    } catch (e: any) {
-                      setMessage(e.message);
-                    }
-                  }}
-                >
-                  <Button
-                    type="text"
-                    danger
-                    aria-label={`删除 ${e.title}`}
-                    icon={<Trash2 size={16} />}
-                  />
-                </Popconfirm>
+                {canEdit(user, e) ? (
+                  <Popconfirm
+                    title="删除这篇记录？"
+                    description="记录及其媒体都会删除，此操作不可撤销。"
+                    okText="删除"
+                    cancelText="取消"
+                    okButtonProps={{ danger: true }}
+                    onConfirm={async () => {
+                      try {
+                        await api(`/admin/entries/${e.id}`, json("DELETE"));
+                        reload();
+                      } catch (e: any) {
+                        setMessage(e.message);
+                      }
+                    }}
+                  >
+                    <Button
+                      type="text"
+                      danger
+                      aria-label={`删除 ${e.title}`}
+                      icon={<Trash2 size={16} />}
+                    />
+                  </Popconfirm>
+                ) : null}
               </div>
             ))}
           </div>
@@ -392,6 +407,7 @@ type UploadTask = {
 function EntryEditor() {
   const { id } = useParams();
   const location = useLocation();
+  const user = useContext(UserContext);
   const usePublishDefaults = location.state?.usePublishDefaults === true;
   const remote = useData<Entry>(`/admin/entries/${id}`);
   const [form, setForm] = useState<Entry | null>(null),
@@ -487,6 +503,20 @@ function EntryEditor() {
   }
   if (remote.error) return <Status error={remote.error} />;
   if (!form) return <Status loading />;
+  if (!canEdit(user, form))
+    return (
+      <>
+        <Link to="/admin" className={s.textLink}>
+          <ArrowLeft size={16} /> 全部记录
+        </Link>
+        <Alert
+          type="info"
+          showIcon
+          message={`这是${form.author?.displayName || "其他家人"}记录的故事，只有记录人和家庭管理员可以修改。`}
+        />
+        <StoryView entry={form} preview />
+      </>
+    );
   const uploading = tasks.some((t) => !t.done && !t.error);
   function insert(mark: string) {
     const el = text.current?.resizableTextArea?.textArea;
@@ -631,7 +661,7 @@ function EntryEditor() {
           <div className={s.editorMedia}>
             {form.media.map((m, i) => (
               <div key={m.id}>
-                <img src={m.thumb} alt={m.name} />
+                <MediaImage media={m} alt={m.name} />
                 {m.kind === "video" && <span className={s.badge}>视频</span>}
                 <Input
                   size="small"
@@ -986,7 +1016,7 @@ function AlbumEditor() {
         <div className={s.editorMedia}>
           {form.items.map((m, i) => (
             <div key={m.id}>
-              <img src={m.thumb} alt={m.name} />
+              <MediaImage media={m} alt={m.name} />
               <div className={s.mediaActions}>
                 <Button
                   type="text"
@@ -1049,7 +1079,7 @@ function AlbumEditor() {
                   onClick={() => update({ items: [...form.items, m] })}
                   title={`添加 ${m.name}`}
                 >
-                  <img src={m.thumb} alt={m.name} />
+                  <MediaImage media={m} alt={m.name} />
                   <Plus size={18} />
                 </Button>
               ))}
@@ -1423,7 +1453,7 @@ function ProfileEditor({ refresh }: { refresh: () => void }) {
                 key={m.id}
                 onClick={() => update({ coverMediaId: m.id })}
               >
-                <img src={m.thumb} alt={m.name} />
+                <MediaImage media={m} alt={m.name} />
                 {form.coverMediaId === m.id && <Check size={20} />}
               </Button>
             ))}

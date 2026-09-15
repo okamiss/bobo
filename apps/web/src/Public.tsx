@@ -39,6 +39,7 @@ import {
   EntryCard,
   PageHeader,
   MediaGrid,
+  MediaImage,
   StoryView,
 } from "./shared";
 import heroBobo from "./assets/4E98EB3C4740C1B85301A5D3F6CA2579.png";
@@ -200,7 +201,11 @@ function Home() {
             <span className={s.tape} />
             <div className={s.heroPicture}>
               {p.cover ? (
-                <img src={p.cover.url} alt={`${p.name}的封面照片`} />
+                <MediaImage
+                  media={p.cover}
+                  variant="url"
+                  alt={`${p.name}的封面照片`}
+                />
               ) : (
                 <img
                   className={s.defaultHeroPhoto}
@@ -460,8 +465,8 @@ function Timeline() {
                       </div>
                     </div>
                     {coverOf(e) && (
-                      <img
-                        src={coverOf(e).thumb}
+                      <MediaImage
+                        media={coverOf(e)}
                         alt={e.title}
                         loading="lazy"
                       />
@@ -554,7 +559,7 @@ function Albums() {
               <Link to={`/albums/${a.id}`} className={s.albumCard} key={a.id}>
                 <div>
                   {cover ? (
-                    <img src={cover.thumb} alt={a.title} />
+                    <MediaImage media={cover} alt={a.title} />
                   ) : (
                     <Camera size={48} />
                   )}
@@ -621,7 +626,7 @@ function About() {
       <div className={s.about}>
         <div className={s.aboutPortrait}>
           {p.cover ? (
-            <img src={p.cover.url} alt={p.name} />
+            <MediaImage media={p.cover} variant="url" alt={p.name} />
           ) : (
             <img
               className={s.defaultAboutPhoto}

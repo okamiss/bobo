@@ -7,3 +7,4 @@ backups/
 data/
 test-results/
 *.log
+*.tsbuildinfo

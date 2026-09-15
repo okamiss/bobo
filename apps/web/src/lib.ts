@@ -23,6 +23,7 @@ export type Entry = {
   milestone: boolean;
   featured: boolean;
   coverMediaId: string | null;
+  authorId: string | null;
   author: { displayName: string } | null;
   media: Media[];
   previous?: { id: string; title: string };
