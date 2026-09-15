@@ -34,7 +34,6 @@ import {
   ProfileContext,
   useData,
   Status,
-  Dog,
   Empty,
   SectionTitle,
   EntryCard,
@@ -42,6 +41,11 @@ import {
   MediaGrid,
   StoryView,
 } from "./shared";
+import heroBobo from "./assets/4E98EB3C4740C1B85301A5D3F6CA2579.png";
+import aboutBobo from "./assets/56E533201772CF5835548CB88C796286.png";
+import puppyBobo from "./assets/27C63527D74D7CF3BD2A0D6AEAE84E07.png";
+import playtimeBobo from "./assets/8FD87A3837E70E0F19E258B303C11894.png";
+import outingBobo from "./assets/F7B76A93FE632569D9F30CC5AE1D4503.png";
 function Layout() {
   const { data: profile, error } = useData<Profile>("/profile");
   const loc = useLocation();
@@ -198,14 +202,11 @@ function Home() {
               {p.cover ? (
                 <img src={p.cover.url} alt={`${p.name}的封面照片`} />
               ) : (
-                <>
-                  <div className={s.sun} />
-                  <div className={s.ground} />
-                  <Dog className={s.dog} />
-                  <span className={s.artCaption}>
-                    插画占位 · 等待啵啵的真实照片
-                  </span>
-                </>
+                <img
+                  className={s.defaultHeroPhoto}
+                  src={heroBobo}
+                  alt={`${p.name}趴在床边看向镜头`}
+                />
               )}
             </div>
             <div className={s.polaroidCaption}>
@@ -322,7 +323,9 @@ function Home() {
           </Link>
         </div>
         <div className={s.albumIllustration}>
-          <Camera size={58} strokeWidth={1.3} />
+          <img src={puppyBobo} alt="啵啵小时候坐在地板上" />
+          <img src={playtimeBobo} alt="玩耍后的啵啵" />
+          <img src={outingBobo} alt="外出时坐在怀里的啵啵" />
           <span>
             {albums.data?.length
               ? `${albums.data.length} 本记忆相册`
@@ -615,10 +618,11 @@ function About() {
           {p.cover ? (
             <img src={p.cover.url} alt={p.name} />
           ) : (
-            <>
-              <Dog />
-              <small>插画占位 · 等待真实照片</small>
-            </>
+            <img
+              className={s.defaultAboutPhoto}
+              src={aboutBobo}
+              alt={`${p.name}坐在地板上看向镜头`}
+            />
           )}
         </div>
         <div>

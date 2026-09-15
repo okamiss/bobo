@@ -326,41 +326,9 @@ hr {
   height: 100%;
   width: 100%;
 }
-.sun {
-  position: absolute;
-  width: 145px;
-  height: 145px;
-  right: -16px;
-  top: 15px;
-  border-radius: 50%;
-  background: #e9dfb5;
-}
-.ground {
-  position: absolute;
-  background: #a7b38e;
-  border-radius: 50%;
-  width: 580px;
-  height: 270px;
-  left: -80px;
-  top: 217px;
-  transform: rotate(-9deg);
-}
-.dog {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  bottom: -11px;
-  left: 0;
-}
-.artCaption {
-  position: absolute;
-  bottom: 8px;
-  left: 10px;
-  font-size: 9px;
-  color: #4d5d42;
-  background: #edf0d699;
-  padding: 3px 6px;
-  border-radius: 3px;
+.defaultHeroPhoto {
+  object-position: center 47%;
+  filter: saturate(0.86) contrast(0.96) brightness(1.03);
 }
 .polaroidCaption {
   display: flex;
@@ -623,21 +591,49 @@ hr {
 }
 .albumIllustration {
   position: relative;
-  width: 192px;
-  height: 132px;
-  transform: rotate(8deg);
-  background: #f9f8e9;
-  box-shadow:
-    1px 5px 0 #c9d1b9,
-    2px 7px 0 #e5e8d8;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
+  width: 224px;
+  height: 144px;
   color: #9aa688;
-  gap: 15px;
+}
+.albumIllustration > img {
+  position: absolute;
+  width: 98px;
+  height: 120px;
+  border: 6px solid #fffdf4;
+  box-shadow: 2px 7px 15px #59634b26;
+  object-fit: cover;
+  filter: saturate(0.82) contrast(0.96) brightness(1.04);
+}
+.albumIllustration > img:nth-of-type(1) {
+  left: 0;
+  top: 13px;
+  z-index: 1;
+  transform: rotate(-10deg);
+  object-position: center 42%;
+}
+.albumIllustration > img:nth-of-type(2) {
+  left: 63px;
+  top: 0;
+  z-index: 2;
+  transform: rotate(2deg);
+  object-position: center 34%;
+}
+.albumIllustration > img:nth-of-type(3) {
+  right: 0;
+  top: 12px;
+  z-index: 1;
+  transform: rotate(10deg);
+  object-position: center 36%;
 }
 .albumIllustration > span {
+  position: absolute;
+  z-index: 3;
+  right: 15px;
+  bottom: -5px;
+  padding: 6px 10px;
+  background: #f9f8e9e8;
+  box-shadow: 1px 3px 8px #59634b14;
+  transform: rotate(-3deg);
   font:
     11px "Noto Serif SC",
     serif;
@@ -1185,6 +1181,10 @@ hr {
 .aboutPortrait > img {
   width: 100%;
   height: 370px;
+}
+.defaultAboutPhoto {
+  object-position: center 48%;
+  filter: saturate(0.85) contrast(0.96) brightness(1.03);
 }
 .aboutPortrait > small {
   display: block;

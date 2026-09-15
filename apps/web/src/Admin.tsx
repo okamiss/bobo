@@ -4,6 +4,7 @@ import {
   Route,
   Link,
   NavLink,
+  useLocation,
   useNavigate,
   useParams,
   useSearchParams,
@@ -202,7 +203,9 @@ function AdminEntries() {
                 "/admin/entries",
                 json("POST", { occurredOn: today() }),
               );
-              nav(`/admin/entries/${e.id}`);
+              nav(`/admin/entries/${e.id}`, {
+                state: { usePublishDefaults: true },
+              });
             } catch (e: any) {
               setMessage(e.message);
             }
@@ -305,6 +308,7 @@ type UploadTask = {
 
 function EntryEditor() {
   const { id } = useParams();
+  const location = useLocation();
   const remote = useData<Entry>(`/admin/entries/${id}`);
   const [form, setForm] = useState<Entry | null>(null),
     [dirty, setDirty] = useState(false),
@@ -314,8 +318,13 @@ function EntryEditor() {
     [tasks, setTasks] = useState<UploadTask[]>([]);
   const text = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
-    if (remote.data) setForm(remote.data);
-  }, [remote.data]);
+    if (remote.data)
+      setForm(
+        location.state?.usePublishDefaults
+          ? { ...remote.data, status: "published", visibility: "public" }
+          : remote.data,
+      );
+  }, [location.state, remote.data]);
   useUnsaved(dirty || tasks.some((t) => !t.done && !t.error));
   const change = (v: Partial<Entry>) => {
     setForm((f) => (f ? { ...f, ...v } : f));
@@ -1009,13 +1018,13 @@ function ProfileEditor({ refresh }: { refresh: () => void }) {
         </div>
         <h3>首页封面照片</h3>
         <p className={s.hint}>
-          从公开且已发布的故事中选择照片；留空时显示雪纳瑞插画占位。
+          从公开且已发布的故事中选择照片；留空时显示站内默认的啵啵照片。
         </p>
         <button
           className={s.secondary}
           onClick={() => update({ coverMediaId: null })}
         >
-          使用插画占位
+          使用默认照片
         </button>
         <div className={s.library}>
           {media.data
