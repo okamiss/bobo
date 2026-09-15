@@ -1,0 +1,7 @@
+services:
+  init:
+    image: ${ACR_REGISTRY:?Set ACR_REGISTRY}/${ACR_NAMESPACE:?Set ACR_NAMESPACE}/bobo-api:${IMAGE_TAG:-latest}
+  api:
+    image: ${ACR_REGISTRY:?Set ACR_REGISTRY}/${ACR_NAMESPACE:?Set ACR_NAMESPACE}/bobo-api:${IMAGE_TAG:-latest}
+  web:
+    image: ${ACR_REGISTRY:?Set ACR_REGISTRY}/${ACR_NAMESPACE:?Set ACR_NAMESPACE}/bobo-web:${IMAGE_TAG:-latest}
