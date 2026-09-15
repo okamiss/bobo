@@ -169,7 +169,7 @@ npm run test:integration
 服务器无法稳定访问 Docker Hub，且 GitHub 托管运行器无法连接中国区 ACR 时，让 ACR 绑定 GitHub 并自行构建镜像。这样服务器不再执行 Dockerfile，也不需要在本地打包镜像。
 
 1. 在同一 ACR 命名空间下创建 `bobo-api` 和 `bobo-web` 两个私有仓库。
-2. 为两个仓库绑定 GitHub 的 `main` 分支，构建上下文均为 `/`；`bobo-api` 使用 `Dockerfile.api`，`bobo-web` 使用 `Dockerfile.web`。开启代码变更自动构建，并生成 `latest` 和 40 位 Commit ID 两个标签。
+2. 为两个仓库绑定 GitHub 的 `main` 分支，构建上下文均为 `/`；`bobo-api` 使用 `Dockerfile.api`，`bobo-web` 使用 `Dockerfile.web`。开启代码变更自动构建，镜像版本填写 `latest`。
 3. 在服务器 `.env` 中加入。地址必须从 ACR 实例的“访问凭证”页面复制；ECS 与 ACR 同地域时可使用控制台显示的 VPC 地址：
 
    ```dotenv
@@ -183,15 +183,15 @@ npm run test:integration
    docker login crpi-xxxx.cn-shanghai.personal.cr.aliyuncs.com
    ```
 
-GitHub Actions 的 `Publish application images` 仅保留为手动备用流程。日常发布由 ACR 仓库绑定 GitHub 后自动构建，并同时生成 `latest` 和该提交哈希两个标签。服务器更新只需：
+GitHub Actions 的 `Publish application images` 仅保留为手动备用流程。日常发布由 ACR 仓库绑定 GitHub 后自动构建；确认 API 和 Web 的 `latest` 镜像都构建成功后，服务器更新只需：
 
 ```bash
 cd /opt/bobo && bash scripts/update-server.sh
 ```
 
-脚本依次执行：备份数据库 → `git pull`（GitHub 连接中断时自动重试）→ 从 ACR 拉取与当前提交哈希一致的 API/Web 镜像 → 执行迁移并等待所有服务健康 → 清理旧提交的镜像。若镜像还在构建，脚本最多等待 10 分钟。`.env` 中的 `COMPOSE_FILE`（例如 HTTPS 配置）会被保留，脚本只额外叠加 `compose.registry.yaml`。
+脚本依次执行：备份数据库 → `git pull`（GitHub 连接中断时自动重试）→ 从 ACR 拉取 API/Web 的 `latest` 镜像 → 执行迁移并等待所有服务健康。`.env` 中的 `COMPOSE_FILE`（例如 HTTPS 配置）会被保留，脚本只额外叠加 `compose.registry.yaml`。
 
-首次切换时服务器上还没有这个脚本，先执行一次 `git pull --ff-only`。切换后服务器不要再运行 `deploy.sh`，它会在本机构建镜像并访问 Docker Hub。回退到某个已构建的提交：`IMAGE_TAG=<提交哈希> bash scripts/update-server.sh`，回退前注意迁移兼容性。PostgreSQL 镜像仍来自 Docker Hub，已在服务器上的镜像会继续使用。
+首次切换时服务器上还没有这个脚本，先执行一次 `git pull --ff-only`。切换后服务器不要再运行 `deploy.sh`，它会在本机构建镜像并访问 Docker Hub。PostgreSQL 镜像仍来自 Docker Hub，已在服务器上的镜像会继续使用。
 
 如果 GitHub Actions 在 ACR 登录步骤连续五次出现 `Get https://.../v2/: context deadline exceeded`，先在本地和服务器分别请求 `https://<ACR_REGISTRY>/v2/`。快速返回 `401 Unauthorized` 说明入口可达；连接超时说明公网实例地址或公网访问配置有误。若只有 GitHub 托管运行器超时，可改用 ACR 仓库自带的 GitHub 自动构建，并开启“海外机器构建”。
 

@@ -35,9 +35,9 @@ case "$separator$files$separator" in
 esac
 export COMPOSE_FILE="$files"
 
-# Images are tagged with the commit that built them, so code and images always
-# match. Override for a rollback: IMAGE_TAG=<commit> bash scripts/update-server.sh
-export IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse HEAD)}"
+# ACR Personal Edition build rules publish one fixed tag in the current UI.
+# Wait for both ACR builds to finish before updating the server.
+export IMAGE_TAG="${IMAGE_TAG:-latest}"
 
 printf 'Compose files: %s\nImage tag: %s\n' "$COMPOSE_FILE" "$IMAGE_TAG"
 docker compose config --quiet
@@ -48,7 +48,7 @@ for attempt in $(seq 1 20); do
     break
   fi
   printf '%s\n' "$output" >&2
-  if ! grep -qiE 'manifest unknown|not found' <<<"$output" || ((attempt == 20)); then
+  if ! grep -qiE 'manifest unknown|not found|timeout|timed out|connection|TLS' <<<"$output" || ((attempt == 20)); then
     printf '%s\n' 'Image pull failed. Check "docker login" and the GitHub Actions run for this commit.' >&2
     exit 1
   fi
@@ -68,4 +68,4 @@ docker image ls --format '{{.Repository}}:{{.Tag}}' |
   grep -v ":${IMAGE_TAG}\$" |
   xargs -r docker image rm >/dev/null 2>&1 || true
 
-printf 'Bobo is running commit %s from Alibaba Cloud ACR.\n' "$IMAGE_TAG"
+printf 'Bobo is running image tag %s from Alibaba Cloud ACR.\n' "$IMAGE_TAG"
