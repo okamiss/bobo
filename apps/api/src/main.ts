@@ -26,6 +26,7 @@ import {
   ArgumentsHost,
   HttpException,
 } from "@nestjs/common";
+import { NestExpressApplication } from "@nestjs/platform-express";
 import { Request, Response } from "express";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
@@ -664,7 +665,11 @@ async function main() {
     where: { state: { in: ["uploading", "processing"] } },
     data: { state: "pending" },
   });
-  const app = await NestFactory.create(AppModule, { bodyParser: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: true,
+  });
+  // The API is only reachable through Nginx, which sets X-Forwarded-For.
+  app.set("trust proxy", 1);
   app.use(
     helmet({
       contentSecurityPolicy: false,
@@ -677,6 +682,7 @@ async function main() {
     rateLimit({
       windowMs: 15 * 60000,
       limit: 15,
+      skipSuccessfulRequests: true,
       standardHeaders: "draft-7",
       legacyHeaders: false,
       message: { message: "登录尝试过多，请稍后再试" },
