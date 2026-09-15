@@ -170,21 +170,21 @@ npm run test:integration
 
 1. 在同一 ACR 命名空间下创建 `bobo-api` 和 `bobo-web` 两个私有仓库。
 2. 在 GitHub 仓库的 `Settings > Secrets and variables > Actions` 中添加：
-   - `ACR_REGISTRY`：例如 `registry.cn-hangzhou.aliyuncs.com`
+   - `ACR_REGISTRY`：从 ACR 实例的“访问凭证”页面复制公网登录地址，只填写主机名，不含 `https://` 和路径。新版个人版通常形如 `crpi-xxxx.cn-hangzhou.personal.cr.aliyuncs.com`
    - `ACR_NAMESPACE`：ACR 命名空间
    - `ACR_USERNAME`：ACR 登录用户名
    - `ACR_PASSWORD`：ACR 登录密码
 3. 在服务器 `.env` 中加入（ECS 与 ACR 同地域时，可把两处地址换成 `registry-vpc.cn-hangzhou.aliyuncs.com` 走内网拉取）：
 
    ```dotenv
-   ACR_REGISTRY=registry.cn-hangzhou.aliyuncs.com
+   ACR_REGISTRY=crpi-xxxx.cn-hangzhou.personal.cr.aliyuncs.com
    ACR_NAMESPACE=your-namespace
    ```
 
 4. 在服务器上登录一次 ACR：
 
    ```bash
-   docker login registry.cn-hangzhou.aliyuncs.com
+   docker login crpi-xxxx.cn-hangzhou.personal.cr.aliyuncs.com
    ```
 
 每次推送到 `main`，GitHub Actions 的 `Publish application images` 会构建镜像，并同时打上 `latest` 和该提交哈希两个标签。服务器更新只需：
@@ -196,5 +196,7 @@ cd /opt/bobo && bash scripts/update-server.sh
 脚本依次执行：备份数据库 → `git pull`（GitHub 连接中断时自动重试）→ 从 ACR 拉取与当前提交哈希一致的 API/Web 镜像 → 执行迁移并等待所有服务健康 → 清理旧提交的镜像。若镜像还在构建，脚本最多等待 10 分钟。`.env` 中的 `COMPOSE_FILE`（例如 HTTPS 配置）会被保留，脚本只额外叠加 `compose.registry.yaml`。
 
 首次切换时服务器上还没有这个脚本，先执行一次 `git pull --ff-only`。切换后服务器不要再运行 `deploy.sh`，它会在本机构建镜像并访问 Docker Hub。回退到某个已构建的提交：`IMAGE_TAG=<提交哈希> bash scripts/update-server.sh`，回退前注意迁移兼容性。PostgreSQL 镜像仍来自 Docker Hub，已在服务器上的镜像会继续使用。
+
+如果 GitHub Actions 在 ACR 登录步骤连续五次出现 `Get https://.../v2/: context deadline exceeded`，先在本地和服务器分别请求 `https://<ACR_REGISTRY>/v2/`。快速返回 `401 Unauthorized` 说明入口可达；连接超时说明公网实例地址或公网访问配置有误。若只有 GitHub 托管运行器超时，可改用 ACR 仓库自带的 GitHub 自动构建，并开启“海外机器构建”。
 
 实际验收记录见 `docs/verification.md`。本地 Docker 成功不等于真实阿里云服务器或 OSS 已验收。
