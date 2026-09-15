@@ -31,6 +31,9 @@ jobs:
           context: .
           file: Dockerfile.api
           push: true
+          # ACR Personal Edition rejects OCI attestation manifests.
+          provenance: false
+          sbom: false
           tags: |
             ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/bobo-api:latest
             ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/bobo-api:${{ github.sha }}
@@ -43,6 +46,8 @@ jobs:
           context: .
           file: Dockerfile.web
           push: true
+          provenance: false
+          sbom: false
           tags: |
             ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/bobo-web:latest
             ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/bobo-web:${{ github.sha }}
