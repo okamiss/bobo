@@ -166,28 +166,24 @@ npm run test:integration
 
 ## 使用阿里云 ACR 自动构建镜像
 
-服务器无法稳定访问 Docker Hub 时，推荐让 GitHub Actions 构建镜像并推送到阿里云 ACR。这样服务器不再执行 Dockerfile，也不需要在本地打包镜像。
+服务器无法稳定访问 Docker Hub，且 GitHub 托管运行器无法连接中国区 ACR 时，让 ACR 绑定 GitHub 并自行构建镜像。这样服务器不再执行 Dockerfile，也不需要在本地打包镜像。
 
 1. 在同一 ACR 命名空间下创建 `bobo-api` 和 `bobo-web` 两个私有仓库。
-2. 在 GitHub 仓库的 `Settings > Secrets and variables > Actions` 中添加：
-   - `ACR_REGISTRY`：从 ACR 实例的“访问凭证”页面复制公网登录地址，只填写主机名，不含 `https://` 和路径。新版个人版通常形如 `crpi-xxxx.cn-hangzhou.personal.cr.aliyuncs.com`
-   - `ACR_NAMESPACE`：ACR 命名空间
-   - `ACR_USERNAME`：ACR 登录用户名
-   - `ACR_PASSWORD`：ACR 登录密码
-3. 在服务器 `.env` 中加入（ECS 与 ACR 同地域时，可把两处地址换成 `registry-vpc.cn-hangzhou.aliyuncs.com` 走内网拉取）：
+2. 为两个仓库绑定 GitHub 的 `main` 分支，构建上下文均为 `/`；`bobo-api` 使用 `Dockerfile.api`，`bobo-web` 使用 `Dockerfile.web`。开启代码变更自动构建，并生成 `latest` 和 40 位 Commit ID 两个标签。
+3. 在服务器 `.env` 中加入。地址必须从 ACR 实例的“访问凭证”页面复制；ECS 与 ACR 同地域时可使用控制台显示的 VPC 地址：
 
    ```dotenv
-   ACR_REGISTRY=crpi-xxxx.cn-hangzhou.personal.cr.aliyuncs.com
+   ACR_REGISTRY=crpi-xxxx.cn-shanghai.personal.cr.aliyuncs.com
    ACR_NAMESPACE=your-namespace
    ```
 
 4. 在服务器上登录一次 ACR：
 
    ```bash
-   docker login crpi-xxxx.cn-hangzhou.personal.cr.aliyuncs.com
+   docker login crpi-xxxx.cn-shanghai.personal.cr.aliyuncs.com
    ```
 
-每次推送到 `main`，GitHub Actions 的 `Publish application images` 会构建镜像，并同时打上 `latest` 和该提交哈希两个标签。服务器更新只需：
+GitHub Actions 的 `Publish application images` 仅保留为手动备用流程。日常发布由 ACR 仓库绑定 GitHub 后自动构建，并同时生成 `latest` 和该提交哈希两个标签。服务器更新只需：
 
 ```bash
 cd /opt/bobo && bash scripts/update-server.sh
