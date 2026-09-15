@@ -166,6 +166,8 @@ npm run test:integration
 
 ## 使用阿里云 ACR 自动构建镜像
 
+完整的真实 Ubuntu 部署过程、最终配置和错误对照表见 [`docs/ubuntu-acr-deployment.md`](docs/ubuntu-acr-deployment.md)。
+
 服务器无法稳定访问 Docker Hub，且 GitHub 托管运行器无法连接中国区 ACR 时，让 ACR 绑定 GitHub 并自行构建镜像。这样服务器不再执行 Dockerfile，也不需要在本地打包镜像。
 
 1. 在同一 ACR 命名空间下创建 `bobo-api` 和 `bobo-web` 两个私有仓库。

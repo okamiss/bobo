@@ -49,7 +49,7 @@ for attempt in $(seq 1 20); do
   fi
   printf '%s\n' "$output" >&2
   if ! grep -qiE 'manifest unknown|not found|timeout|timed out|connection|TLS' <<<"$output" || ((attempt == 20)); then
-    printf '%s\n' 'Image pull failed. Check "docker login" and the GitHub Actions run for this commit.' >&2
+    printf '%s\n' 'Image pull failed. Check "docker login", .env registry values, and both ACR build logs.' >&2
     exit 1
   fi
   printf 'Images for this commit are not published yet, waiting 30 seconds (%s/20)...\n' "$attempt"
