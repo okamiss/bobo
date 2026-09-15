@@ -1,0 +1,79 @@
+name: bobo
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+x-app-env: &app-env
+  DATABASE_URL: postgresql://bobo:${DB_PASSWORD:?Set DB_PASSWORD}@db:5432/bobo
+  APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8080}
+  SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET}
+  DEPLOY_ENV: ${DEPLOY_ENV:-local}
+  STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+  MEDIA_ROOT: /data/media
+  OSS_REGION: ${OSS_REGION:-}
+  OSS_BUCKET: ${OSS_BUCKET:-}
+  OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-}
+  OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:-}
+services:
+  db:
+    image: postgres:17.5-alpine
+    environment:
+      POSTGRES_USER: bobo
+      POSTGRES_DB: bobo
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bobo -d bobo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    logging: *logging
+  init:
+    image: bobo-api:local
+    build: { context: ., dockerfile: Dockerfile.api }
+    command: ["npm", "run", "init"]
+    environment:
+      <<: *app-env
+      ADMIN_USERNAME: ${ADMIN_USERNAME:?Set ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+    logging: *logging
+  api:
+    image: bobo-api:local
+    build: { context: ., dockerfile: Dockerfile.api }
+    environment: *app-env
+    volumes: ["media_data:/data/media"]
+    depends_on:
+      init: { condition: service_completed_successfully }
+      db: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+    logging: *logging
+  web:
+    image: bobo-web:local
+    build: { context: ., dockerfile: Dockerfile.web }
+    ports: ["${HTTP_PORT:-8080}:80"]
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/api/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+    logging: *logging
+volumes:
+  postgres_data:
+  media_data:

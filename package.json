@@ -1,0 +1,24 @@
+{
+  "name": "bobo-journal",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @bobo/api && npm run build --workspace @bobo/web",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "node --test tests/unit.test.mjs",
+    "test:integration": "node tests/integration.mjs",
+    "test:oss": "node tests/oss.integration.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "multer": "2.3.0"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  }
+}

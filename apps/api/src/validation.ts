@@ -1,0 +1,59 @@
+import { z } from "zod";
+export const date = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !isNaN(+d) && d.toISOString().slice(0, 10) === v;
+  }, "日期无效");
+export const entryInput = z.object({
+  title: z.string().trim().min(1).max(150),
+  occurredOn: date,
+  kind: z.enum(["daily", "event"]),
+  body: z.string().max(50000),
+  tags: z.array(z.string().trim().min(1).max(30)).max(20),
+  status: z.enum(["draft", "published"]),
+  visibility: z.enum(["public", "private"]),
+  milestone: z.boolean(),
+  featured: z.boolean(),
+  coverMediaId: z.string().uuid().nullable(),
+  media: z
+    .array(z.object({ id: z.string().uuid(), caption: z.string().max(500) }))
+    .max(100)
+    .optional(),
+});
+export const profileInput = z.object({
+  siteName: z.string().trim().min(1).max(50),
+  name: z.string().trim().min(1).max(50),
+  breed: z.string().max(50),
+  birthday: date.nullable(),
+  homeDate: date.nullable(),
+  intro: z.string().max(2000),
+  personality: z.string().max(500),
+  hobbies: z.string().max(500),
+  coverMediaId: z.string().uuid().nullable(),
+});
+export const albumInput = z
+  .object({
+    title: z.string().trim().min(1).max(100),
+    description: z.string().max(2000),
+    visibility: z.enum(["public", "private"]),
+    coverMediaId: z.string().uuid().nullable(),
+    mediaIds: z.array(z.string().uuid()).max(300),
+  })
+  .refine(
+    (v) => new Set(v.mediaIds).size === v.mediaIds.length,
+    "相册不能重复添加同一媒体",
+  );
+export const uploadInput = z
+  .object({
+    entryId: z.string().uuid(),
+    name: z.string().min(1).max(250),
+    mime: z.enum(["image/jpeg", "image/png", "image/webp", "video/mp4"]),
+    size: z.number().int().positive(),
+  })
+  .refine(
+    (v) => v.size <= (v.mime === "video/mp4" ? 200 : 20) * 1024 * 1024,
+    "文件超过大小限制",
+  );
+export const visible = { status: "published", visibility: "public" };
