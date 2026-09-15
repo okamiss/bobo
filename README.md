@@ -1,6 +1,6 @@
 # 啵啵的小日子
 
-雪纳瑞啵啵的响应式成长手账。React + Vite / NestJS / PostgreSQL + Prisma / OSS，前后端分离，全部服务通过 Docker Compose 运行。
+雪纳瑞啵啵的响应式成长手账。React + Vite（后台使用 Ant Design）/ NestJS / PostgreSQL + Prisma / OSS，前后端分离，全部服务通过 Docker Compose 运行。
 
 ## 一键启动
 

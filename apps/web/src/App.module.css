@@ -1256,8 +1256,10 @@ hr {
 .loginCard form {
   text-align: left;
 }
-.loginCard .primary {
-  width: 100%;
+.loginCard form > :global(.ant-alert) {
+  margin-bottom: 16px;
+}
+.loginCard form > :global(.ant-btn) {
   margin-top: 5px;
 }
 .loginCard > small {
@@ -1286,6 +1288,12 @@ hr {
 .adminLayout {
   display: flex;
   min-height: 100vh;
+}
+.adminLayout :global(.ant-select) {
+  width: 100%;
+}
+.adminMain > :global(.ant-alert) {
+  margin-bottom: 22px;
 }
 .sidebar {
   position: fixed;
@@ -1418,6 +1426,9 @@ hr {
   color: #9ea68d;
   font-size: 11px;
 }
+.adminRow :global(.ant-tag) {
+  margin-inline-end: 0;
+}
 .adminThumb {
   width: 70px;
   height: 64px;
@@ -1522,31 +1533,10 @@ hr {
   margin: 0;
 }
 .uploadButton {
-  position: relative;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid #d7dfc9;
-  border-radius: 5px;
-  padding: 9px 12px;
-  font-size: 11px;
-  color: #7f926b;
-  cursor: pointer;
-  margin: 0;
+  display: block;
 }
 .uploadButton input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-.uploadButton:focus-within {
-  outline: 3px solid #c98c63;
-  outline-offset: 3px;
+  display: none;
 }
 .hint {
   font-size: 11px;
@@ -1571,6 +1561,10 @@ hr {
 }
 .uploadTask button {
   font-size: 10px;
+}
+.uploadTask > div:first-child {
+  flex: 1;
+  min-width: 0;
 }
 .editorMedia {
   display: grid;
@@ -1660,6 +1654,8 @@ hr {
 }
 .library > button {
   position: relative;
+  display: block;
+  height: auto;
   padding: 5px;
   background: #fffef7;
 }
