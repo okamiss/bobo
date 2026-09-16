@@ -37,7 +37,8 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
   - 成员只能修改 `authorId` 等于自己的记录及其媒体；站点资料、相册、账号只有 owner 能改。
   - `authorId` 取创建者，之后不再变更（owner 代为发布也不改署名）。
   - 前端 `Admin.tsx` 的 `UserContext` + `canEdit` 按同样规则隐藏入口，两边要同步修改。
-- **公开可见性**：统一使用 `validation.ts` 的 `visible`（`status: "published"` 且 `visibility: "public"`）。公开媒体还要求 `state: "ready"` 且 `attached: true`（记录带着该媒体保存后才置为 attached，所以新上传的媒体在保存前不会公开）。相册和首页封面在**读取时**过滤，故事改为私密后会自动从公开相册和封面中消失，写入时不做级联处理。
+- **公开可见性**：统一使用 `validation.ts` 的 `visible`（`status: "published"` 且 `visibility: "public"`）。公开媒体还要求 `state: "ready"` 且 `attached: true`（记录带着该媒体保存后才置为 attached，所以新上传的媒体在保存前不会公开）。相册和页面封面在**读取时**过滤，故事改为私密后会自动从公开相册和封面中消失，写入时不做级联处理。
+- **页面封面**：`Profile.coverMediaId`（首页）和 `aboutCoverMediaId`（关于页）可指向公开故事照片，或 `entryId` 为 null 的「站点图片」（后台上传，仅 owner，只能是图片）。可选范围由 `validation.ts` 的 `coverChoice` 定义。站点图片只在被选为封面时公开（`MediaService.accessible`），不出现在 `/admin/media` 中，也不能加入相册。未设置封面时前台显示 `shared.tsx` 的 `BoboIllustration`，站点不打包真实照片。
 - **日期**：`occurredOn`、生日等都是 `YYYY-MM-DD` 字符串而不是 DateTime；「今天」按 Asia/Shanghai 计算。排序固定为 `occurredOn desc, id desc`，上一篇/下一篇的查询依赖同一排序。
 
 ### 媒体管线（media.ts）

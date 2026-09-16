@@ -137,6 +137,13 @@ try {
     cookie: memberCookie,
     status: 403,
   });
+  await request("/admin/site-media", { cookie: memberCookie, status: 403 });
+  await request("/admin/media/authorize", {
+    method: "POST",
+    cookie: memberCookie,
+    body: { entryId: null, name: "cover.png", mime: "image/png", size: 100 },
+    status: 403,
+  });
 
   // Members manage their own stories, and attribution stays with them even
   // after the owner edits the story.

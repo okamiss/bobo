@@ -26,16 +26,17 @@ model Session {
 }
 
 model Profile {
-  id           Int     @id @default(1)
-  siteName     String  @default("啵啵的小日子")
-  name         String  @default("啵啵")
-  breed        String  @default("雪纳瑞")
-  birthday     String?
-  homeDate     String?
-  intro        String  @default("把每一次长大，都好好收藏。")
-  personality  String  @default("")
-  hobbies      String  @default("")
-  coverMediaId String?
+  id                Int     @id @default(1)
+  siteName          String  @default("啵啵的小日子")
+  name              String  @default("啵啵")
+  breed             String  @default("雪纳瑞")
+  birthday          String?
+  homeDate          String?
+  intro             String  @default("把每一次长大，都好好收藏。")
+  personality       String  @default("")
+  hobbies           String  @default("")
+  coverMediaId      String?
+  aboutCoverMediaId String?
 }
 
 model Entry {
@@ -63,8 +64,9 @@ model Entry {
 
 model Media {
   id        String      @id @default(uuid())
-  entryId   String
-  entry     Entry       @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  // Null for site images (page covers) uploaded outside of any story.
+  entryId   String?
+  entry     Entry?      @relation(fields: [entryId], references: [id], onDelete: Cascade)
   name      String
   mime      String
   size      Int

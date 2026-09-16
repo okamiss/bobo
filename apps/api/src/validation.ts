@@ -32,6 +32,7 @@ export const profileInput = z.object({
   personality: z.string().max(500),
   hobbies: z.string().max(500),
   coverMediaId: z.string().uuid().nullable(),
+  aboutCoverMediaId: z.string().uuid().nullable(),
 });
 export const albumInput = z
   .object({
@@ -47,7 +48,8 @@ export const albumInput = z
   );
 export const uploadInput = z
   .object({
-    entryId: z.string().uuid(),
+    // Null uploads a site image, such as a page cover, outside of any story.
+    entryId: z.string().uuid().nullable(),
     name: z.string().min(1).max(250),
     mime: z.enum(["image/jpeg", "image/png", "image/webp", "video/mp4"]),
     size: z.number().int().positive(),
@@ -57,6 +59,12 @@ export const uploadInput = z
     "文件超过大小限制",
   );
 export const visible = { status: "published", visibility: "public" };
+// Images that may be chosen as a page cover: site uploads or public story photos.
+export const coverChoice = {
+  state: "ready",
+  kind: "image",
+  OR: [{ entryId: null }, { entry: visible, attached: true }],
+};
 
 const username = z
   .string()

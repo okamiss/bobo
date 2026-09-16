@@ -322,13 +322,10 @@ hr {
   overflow: hidden;
   isolation: isolate;
 }
-.heroPicture > img {
+.heroPicture > img,
+.heroPicture > svg {
   height: 100%;
   width: 100%;
-}
-.defaultHeroPhoto {
-  object-position: center 47%;
-  filter: saturate(0.86) contrast(0.96) brightness(1.03);
 }
 .polaroidCaption {
   display: flex;
@@ -624,6 +621,16 @@ hr {
   z-index: 1;
   transform: rotate(10deg);
   object-position: center 36%;
+}
+.albumDoodle {
+  position: absolute;
+  left: 57px;
+  top: 0;
+  width: 110px;
+  height: 130px;
+  border: 6px solid #fffdf4;
+  box-shadow: 2px 7px 15px #59634b26;
+  transform: rotate(2deg);
 }
 .albumIllustration > span {
   position: absolute;
@@ -1184,13 +1191,10 @@ hr {
   position: relative;
   min-height: 370px;
 }
-.aboutPortrait > img {
+.aboutPortrait > img,
+.aboutPortrait > svg {
   width: 100%;
   height: 370px;
-}
-.defaultAboutPhoto {
-  object-position: center 48%;
-  filter: saturate(0.85) contrast(0.96) brightness(1.03);
 }
 .aboutPortrait > small {
   display: block;
@@ -1716,18 +1720,21 @@ hr {
   gap: 12px;
   margin-top: 20px;
 }
-.library > button {
+.library > button,
+.libraryTile > button:first-child {
   position: relative;
   display: block;
   height: auto;
   padding: 5px;
   background: #fffef7;
 }
-.library > button > img {
+.library > button > img,
+.libraryTile > button:first-child > img {
   height: 110px;
   width: 100%;
 }
-.library > button > svg {
+.library > button > svg,
+.libraryTile > button:first-child > svg {
   position: absolute;
   right: 10px;
   bottom: 10px;
@@ -1738,6 +1745,59 @@ hr {
 .library .chosen {
   outline: 3px solid #8da276;
   outline-offset: 2px;
+}
+.libraryTile {
+  position: relative;
+}
+.libraryTile > button:first-child {
+  width: 100%;
+}
+.libraryTile > .tileDelete {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  background: #fffef4dd;
+}
+.coverPicker {
+  margin-top: 30px;
+  padding-top: 26px;
+  border-top: 1px dashed var(--border);
+}
+.coverCurrent {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.coverPreview {
+  flex: 0 0 190px;
+  height: 150px;
+  overflow: hidden;
+  background: #e4e9d5;
+  border: 6px solid #fffdf4;
+  box-shadow: 2px 6px 14px #59634b1f;
+}
+.coverPreview > img,
+.coverPreview > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.coverCurrent h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 500;
+}
+.coverActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+.coverPicker h4 {
+  margin: 24px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
 }
 @media (min-width: 1600px) {
   .site {
@@ -1993,7 +2053,8 @@ hr {
   .aboutPortrait {
     min-height: 430px;
   }
-  .aboutPortrait > img {
+  .aboutPortrait > img,
+  .aboutPortrait > svg {
     height: 430px;
   }
   .story {
@@ -2163,7 +2224,8 @@ hr {
   .library {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
-  .library > button {
+  .library > button,
+  .libraryTile > button:first-child {
     min-height: 44px;
   }
 }
@@ -2496,7 +2558,8 @@ hr {
     min-height: 280px;
     border-width: 10px;
   }
-  .aboutPortrait > img {
+  .aboutPortrait > img,
+  .aboutPortrait > svg {
     height: min(86vw, 390px);
   }
   .about dl {
@@ -2615,8 +2678,17 @@ hr {
   .library {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .library > button > img {
+  .library > button > img,
+  .libraryTile > button:first-child > img {
     height: min(34vw, 145px);
+  }
+  .coverCurrent {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .coverPreview {
+    flex-basis: auto;
+    height: min(52vw, 220px);
   }
 }
 

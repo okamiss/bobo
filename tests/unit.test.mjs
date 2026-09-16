@@ -49,6 +49,10 @@ test("upload limits distinguish images and video and reject unsupported MIME", (
     uploadInput.safeParse({ ...input, mime: "image/heic", size: 100 }).success,
     false,
   );
+  assert.equal(
+    uploadInput.safeParse({ ...input, entryId: null, size: 100 }).success,
+    true,
+  );
 });
 test("password hashes use unique salts and verify exact input", () => {
   const one = hashPassword("example-test-only"),

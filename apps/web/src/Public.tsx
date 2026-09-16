@@ -24,10 +24,12 @@ import {
   age,
   daysSince,
   coverOf,
+  albumCover,
   type Entry,
   type Profile,
   type Listing,
   type Album,
+  type Media,
 } from "./lib";
 import s from "./App.module.css";
 import {
@@ -41,12 +43,8 @@ import {
   MediaGrid,
   MediaImage,
   StoryView,
+  BoboIllustration,
 } from "./shared";
-import heroBobo from "./assets/4E98EB3C4740C1B85301A5D3F6CA2579.png";
-import aboutBobo from "./assets/56E533201772CF5835548CB88C796286.png";
-import puppyBobo from "./assets/27C63527D74D7CF3BD2A0D6AEAE84E07.png";
-import playtimeBobo from "./assets/8FD87A3837E70E0F19E258B303C11894.png";
-import outingBobo from "./assets/F7B76A93FE632569D9F30CC5AE1D4503.png";
 function Layout() {
   const { data: profile, error } = useData<Profile>("/profile");
   const loc = useLocation();
@@ -142,6 +140,10 @@ function Home() {
     special = useData<Listing>("/entries?milestone=true&limit=3"),
     featured = useData<Listing>("/entries?featured=true&limit=1"),
     albums = useData<Album[]>("/albums");
+  const albumCovers = (albums.data || [])
+    .map(albumCover)
+    .filter((m): m is Media => !!m)
+    .slice(0, 3);
   return (
     <>
       <section className={s.hero}>
@@ -207,11 +209,7 @@ function Home() {
                   alt={`${p.name}的封面照片`}
                 />
               ) : (
-                <img
-                  className={s.defaultHeroPhoto}
-                  src={heroBobo}
-                  alt={`${p.name}趴在床边看向镜头`}
-                />
+                <BoboIllustration />
               )}
             </div>
             <div className={s.polaroidCaption}>
@@ -328,9 +326,13 @@ function Home() {
           </Link>
         </div>
         <div className={s.albumIllustration}>
-          <img src={puppyBobo} alt="啵啵小时候坐在地板上" />
-          <img src={playtimeBobo} alt="玩耍后的啵啵" />
-          <img src={outingBobo} alt="外出时坐在怀里的啵啵" />
+          {albumCovers.length ? (
+            albumCovers.map((m) => (
+              <MediaImage key={m.id} media={m} alt={m.caption || m.name} />
+            ))
+          ) : (
+            <BoboIllustration className={s.albumDoodle} />
+          )}
           <span>
             {albums.data?.length
               ? `${albums.data.length} 本记忆相册`
@@ -553,8 +555,7 @@ function Albums() {
       ) : data.length ? (
         <div className={s.cardGrid}>
           {data.map((a) => {
-            const cover =
-              a.items.find((m) => m.id === a.coverMediaId) || a.items[0];
+            const cover = albumCover(a);
             return (
               <Link to={`/albums/${a.id}`} className={s.albumCard} key={a.id}>
                 <div>
@@ -625,14 +626,10 @@ function About() {
       />
       <div className={s.about}>
         <div className={s.aboutPortrait}>
-          {p.cover ? (
-            <MediaImage media={p.cover} variant="url" alt={p.name} />
+          {p.aboutCover ? (
+            <MediaImage media={p.aboutCover} variant="url" alt={p.name} />
           ) : (
-            <img
-              className={s.defaultAboutPhoto}
-              src={aboutBobo}
-              alt={`${p.name}坐在地板上看向镜头`}
-            />
+            <BoboIllustration />
           )}
         </div>
         <div>

@@ -69,6 +69,7 @@ import {
   StoryView,
   AdminHeading,
   MediaImage,
+  BoboIllustration,
   useUnsaved,
 } from "./shared";
 
@@ -1322,23 +1323,194 @@ function AccountManager({
   );
 }
 
+const coverTypes = ["image/jpeg", "image/png", "image/webp"];
+
+function CoverPicker({
+  title,
+  hint,
+  value,
+  current,
+  uploaded,
+  stories,
+  onChange,
+  onUpload,
+  onRemove,
+}: {
+  title: string;
+  hint: string;
+  value: string | null;
+  current: Media | null;
+  uploaded: Media[];
+  stories: Media[];
+  onChange: (id: string | null) => void;
+  onUpload: (file: File, progress: (n: number) => void) => Promise<string>;
+  onRemove: (m: Media) => Promise<void>;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [progress, setProgress] = useState<number | null>(null),
+    [error, setError] = useState("");
+  const tile = (m: Media) => (
+    <Button
+      key={m.id}
+      className={value === m.id ? s.chosen : ""}
+      title={m.name}
+      onClick={() => onChange(m.id)}
+    >
+      <MediaImage media={m} alt={m.name} />
+      {value === m.id && <Check size={20} />}
+    </Button>
+  );
+  return (
+    <section className={s.coverPicker}>
+      <div className={s.coverCurrent}>
+        <div className={s.coverPreview}>
+          {current ? (
+            <MediaImage media={current} variant="url" alt={`${title}预览`} />
+          ) : (
+            <BoboIllustration />
+          )}
+        </div>
+        <div>
+          <h3>{title}</h3>
+          <p className={s.hint}>{hint}</p>
+          <div className={s.coverActions}>
+            <Button
+              icon={<Upload size={16} />}
+              loading={progress !== null}
+              onClick={() => input.current?.click()}
+            >
+              {progress === null
+                ? "上传图片"
+                : progress < 100
+                  ? `上传中 ${progress}%`
+                  : "正在处理…"}
+            </Button>
+            <Button disabled={!value} onClick={() => onChange(null)}>
+              使用默认插画
+            </Button>
+            <input
+              ref={input}
+              type="file"
+              hidden
+              accept={coverTypes.join(",")}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                setError("");
+                setProgress(0);
+                try {
+                  onChange(await onUpload(file, setProgress));
+                } catch (err: any) {
+                  setError(err.message);
+                } finally {
+                  setProgress(null);
+                }
+              }}
+            />
+          </div>
+          {error ? <Alert type="error" showIcon message={error} /> : null}
+        </div>
+      </div>
+      {uploaded.length ? (
+        <>
+          <h4>上传的图片</h4>
+          <div className={s.library}>
+            {uploaded.map((m) => (
+              <div className={s.libraryTile} key={m.id}>
+                {tile(m)}
+                <Popconfirm
+                  title="删除这张上传的图片？"
+                  description="使用它的封面会恢复为默认插画。"
+                  okText="删除"
+                  cancelText="取消"
+                  okButtonProps={{ danger: true }}
+                  onConfirm={() =>
+                    onRemove(m).catch((err) => setError(err.message))
+                  }
+                >
+                  <Button
+                    className={s.tileDelete}
+                    size="small"
+                    type="text"
+                    danger
+                    aria-label={`删除 ${m.name}`}
+                    icon={<Trash2 size={14} />}
+                  />
+                </Popconfirm>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : null}
+      <h4>公开故事中的照片</h4>
+      {stories.length ? (
+        <div className={s.library}>{stories.map(tile)}</div>
+      ) : (
+        <p className={s.hint}>还没有公开故事中的照片。</p>
+      )}
+    </section>
+  );
+}
+
 function ProfileEditor({ refresh }: { refresh: () => void }) {
   const remote = useData<Profile>("/admin/profile"),
-    media = useData<Media[]>("/admin/media?publicOnly=true");
+    media = useData<Media[]>("/admin/media?publicOnly=true"),
+    siteMedia = useData<Media[]>("/admin/site-media");
   const [form, setForm] = useState<Profile | null>(null),
+    [uploaded, setUploaded] = useState<Media[]>([]),
     [msg, setMsg] = useState(""),
     [dirty, setDirty] = useState(false),
     [busy, setBusy] = useState(false);
   useEffect(() => {
     if (remote.data) setForm(remote.data);
   }, [remote.data]);
+  useEffect(() => {
+    if (siteMedia.data) setUploaded(siteMedia.data);
+  }, [siteMedia.data]);
   useUnsaved(dirty);
   if (remote.error) return <Status error={remote.error} />;
   if (!form) return <Status loading />;
   const update = (v: Partial<Profile>) => {
-    setForm({ ...form, ...v });
+    setForm((f) => (f ? { ...f, ...v } : f));
     setDirty(true);
   };
+  const stories = media.data?.filter((m) => m.kind === "image") || [];
+  const find = (id: string | null) =>
+    (id &&
+      [...uploaded, ...stories, form.cover, form.aboutCover].find(
+        (m) => m?.id === id,
+      )) ||
+    null;
+  async function upload(file: File, progress: (n: number) => void) {
+    if (!coverTypes.includes(file.type))
+      throw new Error("封面只支持 JPG、PNG、WebP 图片");
+    const permit = await api(
+      "/admin/media/authorize",
+      json("POST", {
+        entryId: null,
+        name: file.name,
+        mime: file.type,
+        size: file.size,
+      }),
+    );
+    try {
+      await uploadFile(permit.url, file, permit.headers, progress);
+      await api(`/admin/media/${permit.id}/complete`, json("POST"));
+    } catch (e) {
+      await api(`/admin/media/${permit.id}`, json("DELETE")).catch(() => {});
+      throw e;
+    }
+    const m = await api<Media>(`/media/${permit.id}/access`);
+    setUploaded((list) => [m, ...list]);
+    return m.id;
+  }
+  async function remove(m: Media) {
+    await api(`/admin/media/${m.id}`, json("DELETE"));
+    setUploaded((list) => list.filter((x) => x.id !== m.id));
+    if (form?.coverMediaId === m.id) update({ coverMediaId: null });
+    if (form?.aboutCoverMediaId === m.id) update({ aboutCoverMediaId: null });
+  }
   return (
     <>
       <AdminHeading
@@ -1437,27 +1609,28 @@ function ProfileEditor({ refresh }: { refresh: () => void }) {
             />
           </label>
         </div>
-        <h3>首页封面照片</h3>
-        <p className={s.hint}>
-          从公开且已发布的故事中选择照片；留空时显示站内默认的啵啵照片。
-        </p>
-        <Button onClick={() => update({ coverMediaId: null })}>
-          使用默认照片
-        </Button>
-        <div className={s.library}>
-          {media.data
-            ?.filter((m) => m.kind === "image")
-            .map((m) => (
-              <Button
-                className={form.coverMediaId === m.id ? s.chosen : ""}
-                key={m.id}
-                onClick={() => update({ coverMediaId: m.id })}
-              >
-                <MediaImage media={m} alt={m.name} />
-                {form.coverMediaId === m.id && <Check size={20} />}
-              </Button>
-            ))}
-        </div>
+        <CoverPicker
+          title="首页封面"
+          hint="显示在首页的拍立得相框里。可以上传图片，或从公开故事中选择照片；未选择时显示默认插画。"
+          value={form.coverMediaId}
+          current={find(form.coverMediaId)}
+          uploaded={uploaded}
+          stories={stories}
+          onChange={(coverMediaId) => update({ coverMediaId })}
+          onUpload={upload}
+          onRemove={remove}
+        />
+        <CoverPicker
+          title="关于页封面"
+          hint="显示在「关于啵啵」页面。可以上传图片，或从公开故事中选择照片；未选择时显示默认插画。"
+          value={form.aboutCoverMediaId}
+          current={find(form.aboutCoverMediaId)}
+          uploaded={uploaded}
+          stories={stories}
+          onChange={(aboutCoverMediaId) => update({ aboutCoverMediaId })}
+          onUpload={upload}
+          onRemove={remove}
+        />
       </div>
     </>
   );

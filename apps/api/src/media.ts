@@ -68,12 +68,15 @@ export class MediaService {
     else await unlink(this.path(key)).catch(() => {});
   }
   async authorize(data: {
-    entryId: string;
+    entryId: string | null;
     name: string;
     mime: string;
     size: number;
   }) {
-    if (!(await db.entry.findUnique({ where: { id: data.entryId } })))
+    if (
+      data.entryId &&
+      !(await db.entry.findUnique({ where: { id: data.entryId } }))
+    )
       throw new NotFoundException();
     const id = randomUUID();
     const m = await db.media.create({
@@ -290,11 +293,23 @@ export class MediaService {
     }
   }
   async accessible(id: string, admin: boolean) {
+    // Site images are public only while they are used as a page cover.
+    const p = admin ? null : await db.profile.findUnique({ where: { id: 1 } });
+    const covers = [p?.coverMediaId, p?.aboutCoverMediaId].filter(
+      (x): x is string => !!x,
+    );
     const m = await db.media.findFirst({
       where: {
         id,
         state: "ready",
-        ...(admin ? {} : { entry: visible, attached: true }),
+        ...(admin
+          ? {}
+          : {
+              OR: [
+                { entry: visible, attached: true },
+                { entryId: null, id: { in: covers } },
+              ],
+            }),
       },
     });
     if (!m) throw new NotFoundException();

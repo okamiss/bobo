@@ -1,6 +1,6 @@
 export type Media = {
   id: string;
-  entryId: string;
+  entryId: string | null;
   name: string;
   mime: string;
   kind: "image" | "video";
@@ -51,6 +51,8 @@ export type Profile = {
   hobbies: string;
   coverMediaId: string | null;
   cover: Media | null;
+  aboutCoverMediaId: string | null;
+  aboutCover: Media | null;
 };
 export type Album = {
   id: string;
@@ -107,6 +109,8 @@ export function age(date: string, at = today()) {
 }
 export const coverOf = (e: Entry) =>
   e.media.find((m) => m.id === e.coverMediaId) || e.media[0];
+export const albumCover = (a: Album): Media | undefined =>
+  a.items.find((m) => m.id === a.coverMediaId) || a.items[0];
 export function uploadFile(
   url: string,
   file: File,

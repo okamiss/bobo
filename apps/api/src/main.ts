@@ -41,6 +41,7 @@ import {
   albumInput,
   uploadInput,
   visible,
+  coverChoice,
   date,
   accountInput,
   accountStatusInput,
@@ -82,7 +83,8 @@ async function editableMedia(req: Request, id: string) {
   idSchema.parse(id);
   const media = await db.media.findUnique({ where: { id } });
   if (!media) throw new NotFoundException();
-  await editableEntry(req, media.entryId);
+  if (media.entryId) await editableEntry(req, media.entryId);
+  else await owner(req);
   return media;
 }
 function authUser(admin: {
@@ -253,20 +255,27 @@ class Content {
   }
   async profile(admin = false) {
     const p = await db.profile.findUniqueOrThrow({ where: { id: 1 } });
-    const cover = p.coverMediaId
-      ? await db.media.findFirst({
-          where: {
-            id: p.coverMediaId,
-            state: "ready",
-            kind: "image",
-            ...(admin ? {} : { entry: visible, attached: true }),
-          },
-        })
-      : null;
+    const load = async (id: string | null) => {
+      const m = id
+        ? await db.media.findFirst({
+            where: {
+              id,
+              ...(admin ? { state: "ready", kind: "image" } : coverChoice),
+            },
+          })
+        : null;
+      return m ? this.media.present(m) : null;
+    };
+    const [cover, aboutCover] = await Promise.all([
+      load(p.coverMediaId),
+      load(p.aboutCoverMediaId),
+    ]);
     return {
       ...p,
       coverMediaId: cover?.id || null,
-      cover: cover ? await this.media.present(cover) : null,
+      cover,
+      aboutCoverMediaId: aboutCover?.id || null,
+      aboutCover,
     };
   }
   async albums(admin = false, id?: string) {
@@ -589,19 +598,11 @@ class AdminController {
   @Put("profile") async setProfile(@Req() req: Request, @Body() body: unknown) {
     await owner(req);
     const v = profileInput.parse(body);
-    if (
-      v.coverMediaId &&
-      !(await db.media.findFirst({
-        where: {
-          id: v.coverMediaId,
-          state: "ready",
-          attached: true,
-          kind: "image",
-          entry: visible,
-        },
-      }))
-    )
-      throw new BadRequestException("首页封面需要选择公开故事中的照片");
+    for (const id of [v.coverMediaId, v.aboutCoverMediaId])
+      if (id && !(await db.media.findFirst({ where: { id, ...coverChoice } })))
+        throw new BadRequestException(
+          "封面需要选择上传的图片，或公开故事中的照片",
+        );
     await db.profile.update({ where: { id: 1 }, data: v });
     return this.content.profile(true);
   }
@@ -610,7 +611,12 @@ class AdminController {
     @Body() body: unknown,
   ) {
     const v = uploadInput.parse(body);
-    await editableEntry(req, v.entryId);
+    if (v.entryId) await editableEntry(req, v.entryId);
+    else {
+      await owner(req);
+      if (v.mime === "video/mp4")
+        throw new BadRequestException("页面封面只支持图片");
+    }
     return this.media.authorize(v);
   }
   @Put("media/:id/upload") async upload(
@@ -645,10 +651,19 @@ class AdminController {
     const list = await db.media.findMany({
       where: {
         state: "ready",
+        entryId: { not: null },
         ...(publicOnly === "true" ? { entry: visible, attached: true } : {}),
       },
       orderBy: { createdAt: "desc" },
       take: 500,
+    });
+    return Promise.all(list.map((m) => this.media.present(m)));
+  }
+  @Get("site-media") async siteMedia(@Req() req: Request) {
+    await owner(req);
+    const list = await db.media.findMany({
+      where: { entryId: null, state: "ready" },
+      orderBy: { createdAt: "desc" },
     });
     return Promise.all(list.map((m) => this.media.present(m)));
   }
@@ -672,7 +687,11 @@ class AdminController {
     const { mediaIds, ...v } = albumInput.parse(body);
     if (
       (await db.media.count({
-        where: { id: { in: mediaIds }, state: "ready" },
+        where: {
+          id: { in: mediaIds },
+          state: "ready",
+          entryId: { not: null },
+        },
       })) !== mediaIds.length
     )
       throw new BadRequestException("包含不可用媒体");

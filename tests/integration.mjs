@@ -19,7 +19,9 @@ const env = Object.fromEntries(
 const base = env.APP_ORIGIN;
 let cookie = "";
 const entries = [],
-  albums = [];
+  albums = [],
+  siteMedia = [];
+let profileBefore = null;
 let checks = 0;
 const report = [];
 async function request(
@@ -306,6 +308,33 @@ try {
     assert.equal(story.next?.id ?? null, ordered[i + 1] ?? null);
   }
   report.push("公开故事的上一篇、下一篇与时间线顺序一致");
+  profileBefore = (await request("/admin/profile")).data;
+  const siteCover = await upload(null, image, "image/png", "测试封面.png");
+  siteMedia.push(siteCover);
+  assert(!(await request("/admin/media")).data.some((m) => m.id === siteCover));
+  assert(
+    (await request("/admin/site-media")).data.some((m) => m.id === siteCover),
+  );
+  await request(`/media/${siteCover}/access`, { auth: false, status: 404 });
+  await request("/admin/profile", {
+    method: "PUT",
+    body: { ...profileBefore, aboutCoverMediaId: siteCover },
+  });
+  const publicProfile = (await request("/profile", { auth: false })).data;
+  assert.equal(publicProfile.aboutCover.id, siteCover);
+  assert.equal(publicProfile.coverMediaId, profileBefore.coverMediaId);
+  await request(`/media/${siteCover}/access`, { auth: false });
+  await request("/admin/profile", {
+    method: "PUT",
+    body: { ...profileBefore, aboutCoverMediaId: ma },
+    status: 400,
+  });
+  await request("/admin/media/authorize", {
+    method: "POST",
+    body: { entryId: null, name: "封面.mp4", mime: "video/mp4", size: 100 },
+    status: 400,
+  });
+  report.push("页面封面支持上传图片，且只在被选为封面时公开");
   if (process.argv.includes("--keep")) {
     writeFileSync(
       "test-results/persistence.json",
@@ -320,6 +349,13 @@ try {
     JSON.stringify({ at: new Date().toISOString(), checks, report }, null, 2),
   );
 } finally {
+  if (profileBefore)
+    await request("/admin/profile", {
+      method: "PUT",
+      body: profileBefore,
+    }).catch(() => {});
+  for (const id of siteMedia)
+    await request(`/admin/media/${id}`, { method: "DELETE" }).catch(() => {});
   for (const id of albums)
     await request(`/admin/albums/${id}`, { method: "DELETE" }).catch(() => {});
   for (const id of entries)
