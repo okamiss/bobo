@@ -4,7 +4,11 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 const require = createRequire(import.meta.url);
-const { date, uploadInput } = require("../apps/api/dist/validation.js");
+const {
+  date,
+  uploadInput,
+  healthRecordInput,
+} = require("../apps/api/dist/validation.js");
 const {
   hashPassword,
   checkPassword,
@@ -20,7 +24,14 @@ const source = ts.transpileModule(
     },
   },
 ).outputText;
-const { age, daysSince, anniversaries, valueTicks, monthTicks } = await import(
+const {
+  age,
+  daysSince,
+  anniversaries,
+  valueTicks,
+  monthTicks,
+  healthReminder,
+} = await import(
   `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
 );
 test("dates reject impossible calendar days and accept leap day", () => {
@@ -33,6 +44,28 @@ test("age and home-day calculations are timezone independent", () => {
   assert.equal(age("2024-01-14", "2026-09-14"), "2 岁 8 个月");
   assert.equal(age("2026-09-10", "2026-09-14"), "4 天");
   assert.equal(age("2026-09-20", "2026-09-14"), "");
+});
+test("health records validate dates and reminders use the 30-day window", () => {
+  const record = {
+    kind: "vaccine",
+    occurredOn: "2026-08-01",
+    nextDueOn: "2026-07-31",
+    note: "",
+  };
+  assert.equal(healthRecordInput.safeParse(record).success, false);
+  assert.equal(
+    healthRecordInput.safeParse({ ...record, nextDueOn: null }).success,
+    true,
+  );
+  assert.deepEqual(healthReminder(null, "2026-09-17"), {
+    status: "none",
+    days: null,
+    text: "未设置下次时间",
+  });
+  assert.equal(healthReminder("2026-09-16", "2026-09-17").status, "overdue");
+  assert.equal(healthReminder("2026-09-17", "2026-09-17").status, "today");
+  assert.equal(healthReminder("2026-10-17", "2026-09-17").status, "soon");
+  assert.equal(healthReminder("2026-10-18", "2026-09-17").status, "later");
 });
 test("anniversaries list the next celebrations in date order", () => {
   const brief = (list) => list.map((a) => [a.title, a.date, a.daysLeft]);

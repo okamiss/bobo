@@ -25,6 +25,19 @@ export const measurementInput = z
     (v) => v.weight !== null || v.height !== null,
     "体重和肩高至少填写一项",
   );
+export const healthRecordInput = z
+  .object({
+    kind: z.enum(["vaccine", "deworming", "checkup", "grooming"], {
+      errorMap: () => ({ message: "请选择疫苗、驱虫、体检或美容" }),
+    }),
+    occurredOn: date,
+    nextDueOn: date.nullable(),
+    note: z.string().trim().max(500),
+  })
+  .refine((v) => !v.nextDueOn || v.nextDueOn >= v.occurredOn, {
+    message: "下次时间不能早于本次日期",
+    path: ["nextDueOn"],
+  });
 export const entryInput = z.object({
   title: z.string().trim().min(1).max(150),
   occurredOn: date,

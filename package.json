@@ -13,6 +13,7 @@
     "test:integration": "node tests/integration.mjs",
     "test:memories": "node tests/memories.integration.mjs",
     "test:growth": "node tests/growth.integration.mjs",
+    "test:health": "node tests/health.integration.mjs",
     "test:video": "node tests/video.integration.mjs",
     "test:oss": "node tests/oss.integration.mjs"
   },

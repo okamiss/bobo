@@ -48,6 +48,7 @@ import {
   Users,
   KeyRound,
   ChartLine,
+  HeartPulse,
 } from "lucide-react";
 import {
   api,
@@ -65,7 +66,9 @@ import {
   type AuthUser,
   type Account,
   type Growth,
+  type HealthRecord,
   type AuditEntry,
+  healthReminder,
 } from "./lib";
 import s from "./App.module.css";
 import {
@@ -282,6 +285,7 @@ function AdminContent() {
               <NavLink to="/admin/growth">
                 <ChartLine size={18} /> 成长曲线
               </NavLink>
+              <HealthNavLink />
               <NavLink to="/admin/albums">
                 <ImageIcon size={18} /> 记忆相册
               </NavLink>
@@ -333,6 +337,7 @@ function AdminContent() {
               <Route index element={<AdminEntries />} />
               <Route path="entries/:id" element={<EntryEditor />} />
               <Route path="growth" element={<GrowthManager />} />
+              <Route path="health" element={<HealthManager />} />
               <Route path="albums" element={<AdminAlbums />} />
               <Route path="albums/:id" element={<AlbumEditor />} />
               <Route
@@ -1563,8 +1568,8 @@ function AccountManager({
       <section className={`${s.panel} ${s.auditLog}`}>
         <h3>操作记录</h3>
         <p className={s.hint}>
-          家人修改网站资料、页面封面、相册和成长曲线时会记在这里，显示最近 200
-          条。
+          家人修改网站资料、页面封面、相册、成长曲线和健康档案时会记在这里，显示最近
+          200 条。
         </p>
         {logs.error ? (
           <Status error={logs.error} />
@@ -1689,6 +1694,295 @@ const randomPassword = () =>
     crypto.getRandomValues(new Uint8Array(14)),
     (b) => passwordAlphabet[b % passwordAlphabet.length],
   ).join("");
+
+const healthKindLabels: Record<HealthRecord["kind"], string> = {
+  vaccine: "疫苗",
+  deworming: "驱虫",
+  checkup: "体检",
+  grooming: "美容",
+};
+const healthKindOptions = Object.entries(healthKindLabels).map(
+  ([value, label]) => ({ value, label }),
+);
+const healthNeedsAttention = (record: HealthRecord) =>
+  ["overdue", "today", "soon"].includes(
+    healthReminder(record.nextDueOn).status,
+  );
+
+function HealthNavLink() {
+  const { data, reload } = useData<HealthRecord[]>("/admin/health-records");
+  useEffect(() => {
+    const refresh = () => reload();
+    window.addEventListener("health-records-changed", refresh);
+    return () => window.removeEventListener("health-records-changed", refresh);
+  }, []);
+  const attention = data?.filter(healthNeedsAttention).length ?? 0;
+  return (
+    <NavLink to="/admin/health">
+      <HeartPulse size={18} /> 健康档案
+      {attention ? (
+        <span className={s.navCount} aria-label={`${attention} 项待关注`}>
+          {attention > 99 ? "99+" : attention}
+        </span>
+      ) : null}
+    </NavLink>
+  );
+}
+
+type HealthForm = {
+  kind: HealthRecord["kind"];
+  occurredOn: string;
+  nextDueOn: string;
+  note: string;
+};
+const blankHealthForm = (): HealthForm => ({
+  kind: "vaccine",
+  occurredOn: today(),
+  nextDueOn: "",
+  note: "",
+});
+const reminderColor = (status: ReturnType<typeof healthReminder>["status"]) =>
+  status === "overdue"
+    ? "red"
+    : status === "today"
+      ? "orange"
+      : status === "soon"
+        ? "gold"
+        : status === "later"
+          ? "green"
+          : "default";
+
+function HealthManager() {
+  const { data, error, reload } = useData<HealthRecord[]>(
+    "/admin/health-records",
+  );
+  const [form, setForm] = useState<HealthForm>(blankHealthForm);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  if (error) return <Status error={error} />;
+  if (!data) return <Status loading />;
+  const attention = data.filter(healthNeedsAttention);
+  const field = <K extends keyof HealthForm>(name: K, value: HealthForm[K]) =>
+    setForm((current) => ({ ...current, [name]: value }));
+  const changed = () => {
+    reload();
+    window.dispatchEvent(new Event("health-records-changed"));
+  };
+  return (
+    <>
+      <AdminHeading
+        title="健康档案"
+        text="记录疫苗、驱虫、体检和美容；这些内容只对已登录的家人可见。"
+      />
+      {notice ? (
+        <Alert type={notice.type} showIcon message={notice.text} />
+      ) : null}
+      {attention.length ? (
+        <Alert
+          className={s.healthReminder}
+          type={
+            attention.some(
+              (record) => healthReminder(record.nextDueOn).status === "overdue",
+            )
+              ? "warning"
+              : "info"
+          }
+          showIcon
+          message={`有 ${attention.length} 项健康安排需要关注`}
+          description={attention
+            .slice(0, 3)
+            .map((record) => {
+              const reminder = healthReminder(record.nextDueOn);
+              return `${healthKindLabels[record.kind]}：${record.nextDueOn}（${reminder.text}）`;
+            })
+            .join("；")}
+        />
+      ) : null}
+      <div className={s.healthLayout}>
+        <form
+          className={`${s.panel} ${s.healthForm}`}
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setBusy(true);
+            setNotice(null);
+            try {
+              await api(
+                editing
+                  ? `/admin/health-records/${editing}`
+                  : "/admin/health-records",
+                json(editing ? "PUT" : "POST", {
+                  ...form,
+                  nextDueOn: form.nextDueOn || null,
+                }),
+              );
+              setNotice({
+                type: "success",
+                text: editing ? "健康记录已更新。" : "健康记录已添加。",
+              });
+              setEditing(null);
+              setForm(blankHealthForm());
+              changed();
+            } catch (caught: any) {
+              setNotice({ type: "error", text: caught.message });
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <h3>{editing ? "修改健康记录" : "添加健康记录"}</h3>
+          <label>
+            类型
+            <Select
+              value={form.kind}
+              options={healthKindOptions}
+              onChange={(value) => field("kind", value)}
+            />
+          </label>
+          <label>
+            本次日期
+            <Input
+              type="date"
+              required
+              max={today()}
+              value={form.occurredOn}
+              onChange={(event) => field("occurredOn", event.target.value)}
+            />
+          </label>
+          <label>
+            下次时间（可留空）
+            <Input
+              type="date"
+              min={form.occurredOn}
+              value={form.nextDueOn}
+              onChange={(event) => field("nextDueOn", event.target.value)}
+            />
+          </label>
+          <label>
+            备注（可留空）
+            <Input.TextArea
+              value={form.note}
+              maxLength={500}
+              autoSize={{ minRows: 3, maxRows: 7 }}
+              placeholder="例如：疫苗品牌、医院、医生建议"
+              onChange={(event) => field("note", event.target.value)}
+            />
+          </label>
+          <p className={s.hint}>
+            下次时间到期、当天或进入 30 天内时，会在本页和侧栏提醒。
+          </p>
+          <Space wrap>
+            <Button type="primary" htmlType="submit" loading={busy}>
+              {editing ? "保存修改" : "添加记录"}
+            </Button>
+            {editing ? (
+              <Button
+                onClick={() => {
+                  setEditing(null);
+                  setForm(blankHealthForm());
+                }}
+              >
+                取消修改
+              </Button>
+            ) : null}
+          </Space>
+        </form>
+        <section className={`${s.panel} ${s.healthList}`}>
+          <h3>全部记录</h3>
+          {data.length ? (
+            data.map((record) => {
+              const reminder = healthReminder(record.nextDueOn);
+              return (
+                <article
+                  className={`${s.healthRow} ${
+                    healthNeedsAttention(record) ? s.healthAttention : ""
+                  }`}
+                  key={record.id}
+                >
+                  <Tag color="green">{healthKindLabels[record.kind]}</Tag>
+                  <div className={s.healthMain}>
+                    <strong>{record.occurredOn}</strong>
+                    <div className={s.healthMeta}>
+                      <span>
+                        {record.nextDueOn
+                          ? `下次 ${record.nextDueOn}`
+                          : "未设置下次时间"}
+                      </span>
+                      {record.nextDueOn ? (
+                        <Tag color={reminderColor(reminder.status)}>
+                          {reminder.text}
+                        </Tag>
+                      ) : null}
+                    </div>
+                    {record.note ? (
+                      <p className={s.healthNote}>{record.note}</p>
+                    ) : null}
+                  </div>
+                  <div className={s.healthActions}>
+                    <Button
+                      size="small"
+                      type="link"
+                      onClick={() => {
+                        setEditing(record.id);
+                        setForm({
+                          kind: record.kind,
+                          occurredOn: record.occurredOn,
+                          nextDueOn: record.nextDueOn ?? "",
+                          note: record.note,
+                        });
+                        setNotice(null);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    >
+                      修改
+                    </Button>
+                    <Popconfirm
+                      title="删除这条健康记录？"
+                      okText="删除"
+                      cancelText="取消"
+                      okButtonProps={{ danger: true }}
+                      onConfirm={async () => {
+                        try {
+                          await api(
+                            `/admin/health-records/${record.id}`,
+                            json("DELETE"),
+                          );
+                          if (editing === record.id) {
+                            setEditing(null);
+                            setForm(blankHealthForm());
+                          }
+                          setNotice({
+                            type: "success",
+                            text: "健康记录已删除。",
+                          });
+                          changed();
+                        } catch (caught: any) {
+                          setNotice({ type: "error", text: caught.message });
+                        }
+                      }}
+                    >
+                      <Button size="small" type="link" danger>
+                        删除
+                      </Button>
+                    </Popconfirm>
+                  </div>
+                </article>
+              );
+            })
+          ) : (
+            <Empty
+              title="还没有健康记录"
+              text="从最近一次疫苗、驱虫、体检或美容开始记录吧。"
+            />
+          )}
+        </section>
+      </div>
+    </>
+  );
+}
 
 function GrowthManager() {
   const { data, error, reload } = useData<Growth>("/admin/growth");

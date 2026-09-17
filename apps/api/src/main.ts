@@ -49,6 +49,7 @@ import {
   passwordChangeInput,
   passwordResetInput,
   measurementInput,
+  healthRecordInput,
 } from "./validation";
 const idSchema = z.string().uuid();
 const shanghaiToday = () =>
@@ -408,13 +409,19 @@ function measurement(body: unknown) {
     n === null ? null : Math.round(n * 10 ** places) / 10 ** places;
   return { ...v, weight: round(v.weight, 2), height: round(v.height, 1) };
 }
+function healthRecord(body: unknown) {
+  const value = healthRecordInput.parse(body);
+  if (value.occurredOn > shanghaiToday())
+    throw new BadRequestException("不能记录今天以后的完成日期");
+  return value;
+}
 function sameDay(error: any): never {
   if (error.code === "P2002")
     throw new ConflictException("这一天已经有记录了，请直接修改那一条");
   throw error;
 }
-// Every family member can edit shared site content (profile, covers, albums
-// and growth); each change is recorded for the family admin to review.
+// Every family member can edit shared site content (profile, covers, albums,
+// growth and health); each change is recorded for the family admin to review.
 async function audit(
   admin: { id: string; displayName: string },
   action: string,
@@ -443,6 +450,20 @@ const growthValues = (m: { weight: number | null; height: number | null }) =>
   ]
     .filter(Boolean)
     .join("，");
+const healthLabels: Record<string, string> = {
+  vaccine: "疫苗",
+  deworming: "驱虫",
+  checkup: "体检",
+  grooming: "美容",
+};
+const healthSummary = (record: {
+  kind: string;
+  occurredOn: string;
+  nextDueOn: string | null;
+}) =>
+  `${healthLabels[record.kind] ?? record.kind}（${record.occurredOn}${
+    record.nextDueOn ? `，下次 ${record.nextDueOn}` : ""
+  }）`;
 @Controller("api")
 class PublicController {
   constructor(
@@ -976,6 +997,59 @@ class AdminController {
       admin,
       "growth.delete",
       `删除了 ${removed.measuredOn} 的成长记录（${growthValues(removed)}）`,
+    );
+    return { ok: true };
+  }
+  @Get("health-records") healthRecords() {
+    return db.healthRecord.findMany({
+      orderBy: [
+        { nextDueOn: { sort: "asc", nulls: "last" } },
+        { occurredOn: "desc" },
+      ],
+    });
+  }
+  @Post("health-records") async addHealthRecord(
+    @Req() req: Request,
+    @Body() body: unknown,
+  ) {
+    const admin = await currentAdmin(req);
+    const saved = await db.healthRecord.create({ data: healthRecord(body) });
+    await audit(
+      admin,
+      "health.create",
+      `添加了健康记录：${healthSummary(saved)}`,
+    );
+    return saved;
+  }
+  @Put("health-records/:id") async saveHealthRecord(
+    @Req() req: Request,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    const admin = await currentAdmin(req);
+    idSchema.parse(id);
+    const saved = await db.healthRecord.update({
+      where: { id },
+      data: healthRecord(body),
+    });
+    await audit(
+      admin,
+      "health.update",
+      `修改了健康记录：${healthSummary(saved)}`,
+    );
+    return saved;
+  }
+  @Delete("health-records/:id") async removeHealthRecord(
+    @Req() req: Request,
+    @Param("id") id: string,
+  ) {
+    const admin = await currentAdmin(req);
+    idSchema.parse(id);
+    const removed = await db.healthRecord.delete({ where: { id } });
+    await audit(
+      admin,
+      "health.delete",
+      `删除了健康记录：${healthSummary(removed)}`,
     );
     return { ok: true };
   }

@@ -22,6 +22,7 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 - `npm run test:accounts`：账号与成员权限。
 - `npm run test:memories`：「那年今日」接口（用 2088-2090 年的临时故事，不受真实数据和存储模式影响）。
 - `npm run test:growth`：成长曲线接口（用 2001 年的临时记录，结束时恢复原公开设置）。
+- `npm run test:health`：健康档案接口（用 2002 年的临时记录，结束时清理）。
 - `npm run test:video`：视频上传与转码，需要宿主机 ffmpeg 带 libx265；不依赖存储模式。
 - `npm run test:integration`：媒体处理、私密隔离、相册等；需要宿主机有 ffmpeg。它假设 `STORAGE_DRIVER=local`（直接调用本地上传接口、校验本地签名 token），OSS 模式下会中途失败。
 - `npm run test:oss`：`STORAGE_DRIVER=oss` 时的真实 Bucket 联调。
@@ -39,7 +40,7 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 - **角色**：`owner`（家庭管理员）和 `member`。
   - 权限辅助函数：`owner(req)`、`editableEntry(req, id)`、`editableMedia(req, id)`。
   - 成员只能修改 `authorId` 等于自己的记录及其媒体；家庭账号管理和操作记录查看只有 owner 能用。
-  - 站点资料与页面封面、站点图片、相册、成长曲线所有成员都能改，每次成功修改后调用 `main.ts` 的 `audit()` 写入 `AuditLog`（`actorName` 保存当时的显示名，`summary` 为中文描述）。新增这类共享内容的写接口时，也要记录操作；`GET /api/admin/audit-logs` 仅 owner，前端显示在「家庭账号」页。
+  - 站点资料与页面封面、站点图片、相册、成长曲线、健康档案所有成员都能改，每次成功修改后调用 `main.ts` 的 `audit()` 写入 `AuditLog`（`actorName` 保存当时的显示名，`summary` 为中文描述）。新增这类共享内容的写接口时，也要记录操作；`GET /api/admin/audit-logs` 仅 owner，前端显示在「家庭账号」页。
   - `authorId` 取创建者，之后不再变更（owner 代为发布也不改署名）。
   - 前端 `Admin.tsx` 的 `UserContext` + `canEdit` 按同样规则隐藏入口，两边要同步修改。
 - **公开可见性**：统一使用 `validation.ts` 的 `visible`（`status: "published"` 且 `visibility: "public"`）。公开媒体还要求 `state: "ready"` 且 `attached: true`（记录带着该媒体保存后才置为 attached，所以新上传的媒体在保存前不会公开）。相册和页面封面在**读取时**过滤，故事改为私密后会自动从公开相册和封面中消失，写入时不做级联处理。
@@ -47,6 +48,7 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 - **日期**：`occurredOn`、生日等都是 `YYYY-MM-DD` 字符串而不是 DateTime；「今天」按 Asia/Shanghai 计算。排序固定为 `occurredOn desc, id desc`，上一篇/下一篇的查询依赖同一排序。
 - **那年今日**：`GET /api/on-this-day?date=`（`Content.onThisDay`，`date` 可选、默认上海时区今天）返回同月同日的往年公开故事（`yearsAgo`）和一年内同日的故事（`monthsAgo`），往年优先，最多 6 条。
 - **成长曲线**：`Measurement` 表（`measuredOn` 唯一，`weight` kg / `height` cm 可空、至少一项，`note` 只给家人看）。管理接口 `/api/admin/growth`（增删改）和 `/api/admin/growth-visibility` 所有成员可用并记录操作；`GET /api/growth` 只在 `Profile.growthPublic` 为 true 时返回数据，且不含 `id`/`note`。前端 `shared.tsx` 的 `GrowthChart`（体重、肩高分成两张图，不用双 y 轴；线色 `#5f8c46` 经 dataviz 校验；宽度随容器，悬停与方向键查看）和 `GrowthTable`（数据表）在关于页与后台共用。
+- **健康档案**：`HealthRecord` 表记录 `vaccine` / `deworming` / `checkup` / `grooming`、本次日期、可空的下次时间和备注。仅提供受 `AdminGuard` 保护的 `/api/admin/health-records` 增删改查，没有公开接口；所有成员可维护并记录操作。前端以已到期、今天、30 天内、以后分级提醒，侧栏显示需要关注的数量。
 
 ### 媒体管线（media.ts）
 

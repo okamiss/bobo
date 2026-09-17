@@ -19,7 +19,7 @@ model Admin {
   auditLogs    AuditLog[]
 }
 
-// Who changed shared site content (profile, covers, albums, growth) and how.
+// Who changed shared site content (profile, covers, albums, growth, health) and how.
 // actorName keeps the display name at the time, even if the account changes.
 model AuditLog {
   id        String   @id @default(uuid())
@@ -63,6 +63,20 @@ model Measurement {
   height     Float?
   note       String   @default("")
   createdAt  DateTime @default(now())
+}
+
+// Private family health history and optional next-care reminder.
+model HealthRecord {
+  id         String   @id @default(uuid())
+  kind       String
+  occurredOn String
+  nextDueOn  String?
+  note       String   @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([nextDueOn])
+  @@index([occurredOn])
 }
 
 model Entry {

@@ -1573,6 +1573,17 @@ hr {
   background: #dfe6d1;
   color: #596e4d;
 }
+.navCount {
+  min-width: 20px;
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #b76c55;
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
 .sidebarBottom {
   margin-top: auto;
   display: flex;
@@ -1711,6 +1722,92 @@ hr {
   grid-template-columns: 320px minmax(0, 1fr);
   gap: 24px;
   align-items: start;
+}
+.healthLayout {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  margin-top: 24px;
+}
+.healthReminder {
+  margin-top: 16px;
+}
+.healthForm {
+  position: sticky;
+  top: 20px;
+  display: grid;
+  gap: 18px;
+}
+.healthForm h3,
+.healthList h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+.healthForm label {
+  display: grid;
+  gap: 7px;
+}
+.healthForm .hint {
+  margin: -7px 0 0;
+}
+.healthList {
+  display: grid;
+  gap: 0;
+}
+.healthRow {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+}
+.healthRow:last-child {
+  border-bottom: 0;
+}
+.healthAttention {
+  margin-inline: -12px;
+  padding-inline: 12px;
+  border-radius: 6px;
+  background: #fbf5e7;
+}
+.healthMain {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.healthMain strong {
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.healthMeta,
+.healthActions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.healthMeta {
+  color: var(--muted);
+  font-size: 12px;
+}
+.healthMeta :global(.ant-tag),
+.healthRow > :global(.ant-tag) {
+  margin-inline-end: 0;
+}
+.healthNote {
+  margin: 2px 0 0;
+  color: #626b5e;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.healthActions {
+  justify-content: flex-end;
 }
 .accountForm {
   display: grid;
@@ -2155,6 +2252,12 @@ hr {
   .accountLayout {
     grid-template-columns: 1fr;
   }
+  .healthLayout {
+    grid-template-columns: 1fr;
+  }
+  .healthForm {
+    position: static;
+  }
   .site {
     min-width: 0;
     width: 100%;
@@ -2407,6 +2510,7 @@ hr {
     backdrop-filter: blur(14px);
   }
   .sidebar nav a {
+    position: relative;
     min-width: 0;
     min-height: 54px;
     flex-direction: column;
@@ -2415,6 +2519,15 @@ hr {
     padding: 6px 4px;
     font-size: 11px;
     text-align: center;
+  }
+  .sidebar nav .navCount {
+    position: absolute;
+    top: 3px;
+    right: max(5px, 14%);
+    min-width: 17px;
+    margin: 0;
+    padding: 0 4px;
+    line-height: 17px;
   }
   .sidebarBottom {
     margin: 0 0 0 auto;
@@ -2496,6 +2609,14 @@ hr {
   }
 }
 @media (max-width: 600px) {
+  .healthRow {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px 12px;
+  }
+  .healthActions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
   .auditList li {
     grid-template-columns: auto minmax(0, 1fr);
     gap: 2px 10px;

@@ -70,6 +70,21 @@ export type Measurement = {
   note?: string;
 };
 export type Growth = { public: boolean; items: Measurement[] };
+export type HealthRecordKind = "vaccine" | "deworming" | "checkup" | "grooming";
+export type HealthRecord = {
+  id: string;
+  kind: HealthRecordKind;
+  occurredOn: string;
+  nextDueOn: string | null;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+};
+export type HealthReminder = {
+  status: "none" | "overdue" | "today" | "soon" | "later";
+  days: number | null;
+  text: string;
+};
 export type AuditEntry = {
   id: string;
   actorName: string;
@@ -116,6 +131,17 @@ export function daysSince(date: string, at = today()) {
     (Date.parse(`${at}T00:00:00Z`) - Date.parse(`${date}T00:00:00Z`)) /
       86400000,
   );
+}
+export function healthReminder(
+  nextDueOn: string | null,
+  at = today(),
+): HealthReminder {
+  if (!nextDueOn) return { status: "none", days: null, text: "未设置下次时间" };
+  const days = daysSince(at, nextDueOn);
+  if (days < 0) return { status: "overdue", days, text: `已超期 ${-days} 天` };
+  if (days === 0) return { status: "today", days, text: "今天到期" };
+  if (days <= 30) return { status: "soon", days, text: `${days} 天后` };
+  return { status: "later", days, text: `${days} 天后` };
 }
 export function age(date: string, at = today()) {
   if (at < date) return "";
