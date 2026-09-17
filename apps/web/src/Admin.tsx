@@ -10,6 +10,7 @@ import {
   Popconfirm,
   Progress,
   Select,
+  Space,
   Tag,
   type ThemeConfig,
 } from "antd";
@@ -449,6 +450,7 @@ function AdminEntries() {
                     onConfirm={async () => {
                       try {
                         await api(`/admin/entries/${e.id}`, json("DELETE"));
+                        drafts.clear(e.id);
                         reload();
                       } catch (e: any) {
                         setMessage(e.message);
@@ -497,6 +499,70 @@ type UploadTask = {
   done?: boolean;
 };
 
+// Unsaved editor changes are kept in this browser, so a refresh, a closed tab
+// or a phone reclaiming the page while picking photos does not lose them.
+type Draft = {
+  savedAt: number;
+  entry: ReturnType<typeof draftOf>;
+};
+const draftKey = (id: string) => `bobo:draft:${id}`;
+const draftOf = (e: Entry) => ({
+  title: e.title,
+  occurredOn: e.occurredOn,
+  kind: e.kind,
+  body: e.body,
+  tags: e.tags,
+  status: e.status,
+  visibility: e.visibility,
+  milestone: e.milestone,
+  featured: e.featured,
+  coverMediaId: e.coverMediaId,
+  media: e.media.map((m) => ({ id: m.id, caption: m.caption })),
+});
+const drafts = {
+  read(id: string): Draft | null {
+    try {
+      const draft = JSON.parse(localStorage.getItem(draftKey(id)) || "null");
+      return typeof draft?.savedAt === "number" && draft.entry?.media
+        ? draft
+        : null;
+    } catch {
+      return null;
+    }
+  },
+  write(id: string, e: Entry) {
+    try {
+      localStorage.setItem(
+        draftKey(id),
+        JSON.stringify({ savedAt: Date.now(), entry: draftOf(e) }),
+      );
+    } catch {}
+  },
+  clear(id: string) {
+    try {
+      localStorage.removeItem(draftKey(id));
+    } catch {}
+  },
+};
+// Media deleted since the draft was saved are dropped; newer uploads are kept.
+function withDraft(e: Entry, draft: Draft): Entry {
+  const { media, coverMediaId, ...fields } = draft.entry;
+  const current = new Map(e.media.map((m) => [m.id, m]));
+  const kept = media.filter((m) => current.has(m.id));
+  return {
+    ...e,
+    ...fields,
+    coverMediaId:
+      coverMediaId === null || current.has(coverMediaId)
+        ? coverMediaId
+        : e.coverMediaId,
+    media: [
+      ...kept.map((m) => ({ ...current.get(m.id)!, caption: m.caption })),
+      ...e.media.filter((m) => !kept.some((k) => k.id === m.id)),
+    ],
+  };
+}
+
 function EntryEditor() {
   const { id } = useParams();
   const location = useLocation();
@@ -504,6 +570,7 @@ function EntryEditor() {
   const usePublishDefaults = location.state?.usePublishDefaults === true;
   const remote = useData<Entry>(`/admin/entries/${id}`);
   const [form, setForm] = useState<Entry | null>(null),
+    [draft, setDraft] = useState<Draft | null>(null),
     [dirty, setDirty] = useState(false),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
@@ -512,13 +579,43 @@ function EntryEditor() {
   const text = useRef<TextAreaRef>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (remote.data)
-      setForm(
-        usePublishDefaults
-          ? { ...remote.data, status: "published", visibility: "public" }
-          : remote.data,
-      );
-  }, [remote.data, usePublishDefaults]);
+    if (!remote.data || !id) return;
+    const loaded: Entry = usePublishDefaults
+      ? { ...remote.data, status: "published", visibility: "public" }
+      : remote.data;
+    setForm(loaded);
+    const saved = drafts.read(id);
+    const differs =
+      saved &&
+      JSON.stringify(draftOf(withDraft(loaded, saved))) !==
+        JSON.stringify(draftOf(loaded));
+    if (differs) setDraft(saved);
+    else drafts.clear(id);
+  }, [remote.data, usePublishDefaults, id]);
+  // While a previous draft awaits a decision, do not overwrite it.
+  const pending = useRef<Entry | null>(null);
+  pending.current = dirty && !draft ? form : null;
+  useEffect(() => {
+    if (!id || !pending.current) return;
+    const timer = setTimeout(() => {
+      if (pending.current) drafts.write(id, pending.current);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [id, form, dirty, draft]);
+  useEffect(() => {
+    const flush = () => {
+      if (id && pending.current) drafts.write(id, pending.current);
+    };
+    const hidden = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", hidden);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", hidden);
+    };
+  }, [id]);
   useUnsaved(dirty || tasks.some((t) => !t.done && !t.error));
   const change = (v: Partial<Entry>) => {
     setForm((f) => (f ? { ...f, ...v } : f));
@@ -558,6 +655,7 @@ function EntryEditor() {
       );
       setForm(saved);
       setDirty(false);
+      if (id) drafts.clear(id);
       setMessage("已保存这一天。");
     } catch (e: any) {
       setMessage(`保存失败：${e.message}`);
@@ -638,6 +736,43 @@ function EntryEditor() {
           保存记录
         </Button>
       </AdminHeading>
+      {draft ? (
+        <Alert
+          type="warning"
+          showIcon
+          message={`发现 ${new Date(draft.savedAt).toLocaleString("zh-CN", {
+            month: "numeric",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })} 自动保存、还没有提交的修改`}
+          description="可能是上次刷新、关闭页面或网络中断时留下的。恢复后记得点击「保存记录」。"
+          action={
+            <Space>
+              <Button
+                size="small"
+                type="primary"
+                onClick={() => {
+                  setForm((f) => (f ? withDraft(f, draft) : f));
+                  setDirty(true);
+                  setDraft(null);
+                }}
+              >
+                恢复
+              </Button>
+              <Button
+                size="small"
+                onClick={() => {
+                  if (id) drafts.clear(id);
+                  setDraft(null);
+                }}
+              >
+                丢弃
+              </Button>
+            </Space>
+          }
+        />
+      ) : null}
       {message ? (
         <Alert
           type={message.includes("失败") ? "error" : "success"}

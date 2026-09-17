@@ -60,6 +60,7 @@ Schema 在 `apps/api/prisma/schema.prisma`，迁移是已提交的 SQL 目录。
 - `App.tsx` 懒加载两套界面：`/admin/*` → `Admin.tsx`（Ant Design，`ConfigProvider` 自定义主题），其余路由 → `Public.tsx`。样式集中在 `App.module.css`。
 - `lib.ts`：类型定义、`api()`（失败时抛出带服务端 `message` 的 Error，界面直接展示）、日期与年龄计算。`shared.tsx`：`useData(path)` 数据钩子、`ProfileContext`、`StoryView`、`Lightbox`、`useUnsaved`。
 - 正文不渲染 HTML 或 Markdown，`BodyText` 只识别以 `## `、`- `、`> ` 开头的行。
+- `EntryEditor` 把未保存的修改自动写入 `localStorage`（键 `bobo:draft:<entryId>`，`draftOf` 决定保存哪些字段）。打开记录时若草稿与服务器内容不同，提示恢复或丢弃；保存、丢弃、删除记录时清除。给记录新增可编辑字段时，要同步加进 `draftOf`。
 
 ## 部署与发布
 
