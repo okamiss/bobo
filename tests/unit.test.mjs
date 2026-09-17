@@ -45,7 +45,7 @@ test("age and home-day calculations are timezone independent", () => {
   assert.equal(age("2026-09-10", "2026-09-14"), "4 天");
   assert.equal(age("2026-09-20", "2026-09-14"), "");
 });
-test("health records validate dates and reminders use the 30-day window", () => {
+test("health records validate dates and reminders use the 7-day window", () => {
   const record = {
     kind: "vaccine",
     occurredOn: "2026-08-01",
@@ -64,8 +64,8 @@ test("health records validate dates and reminders use the 30-day window", () => 
   });
   assert.equal(healthReminder("2026-09-16", "2026-09-17").status, "overdue");
   assert.equal(healthReminder("2026-09-17", "2026-09-17").status, "today");
-  assert.equal(healthReminder("2026-10-17", "2026-09-17").status, "soon");
-  assert.equal(healthReminder("2026-10-18", "2026-09-17").status, "later");
+  assert.equal(healthReminder("2026-09-24", "2026-09-17").status, "soon");
+  assert.equal(healthReminder("2026-09-25", "2026-09-17").status, "later");
 });
 test("anniversaries list the next celebrations in date order", () => {
   const brief = (list) => list.map((a) => [a.title, a.date, a.daysLeft]);

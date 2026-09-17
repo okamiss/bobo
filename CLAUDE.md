@@ -48,7 +48,7 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 - **日期**：`occurredOn`、生日等都是 `YYYY-MM-DD` 字符串而不是 DateTime；「今天」按 Asia/Shanghai 计算。排序固定为 `occurredOn desc, id desc`，上一篇/下一篇的查询依赖同一排序。
 - **那年今日**：`GET /api/on-this-day?date=`（`Content.onThisDay`，`date` 可选、默认上海时区今天）返回同月同日的往年公开故事（`yearsAgo`）和一年内同日的故事（`monthsAgo`），往年优先，最多 6 条。
 - **成长曲线**：`Measurement` 表（`measuredOn` 唯一，`weight` kg / `height` cm 可空、至少一项，`note` 只给家人看）。管理接口 `/api/admin/growth`（增删改）和 `/api/admin/growth-visibility` 所有成员可用并记录操作；`GET /api/growth` 只在 `Profile.growthPublic` 为 true 时返回数据，且不含 `id`/`note`。前端 `shared.tsx` 的 `GrowthChart`（体重、肩高分成两张图，不用双 y 轴；线色 `#5f8c46` 经 dataviz 校验；宽度随容器，悬停与方向键查看）和 `GrowthTable`（数据表）在关于页与后台共用。
-- **健康档案**：`HealthRecord` 表记录 `vaccine` / `deworming` / `checkup` / `grooming`、本次日期、可空的下次时间和备注。仅提供受 `AdminGuard` 保护的 `/api/admin/health-records` 增删改查，没有公开接口；所有成员可维护并记录操作。前端以已到期、今天、30 天内、以后分级提醒，侧栏显示需要关注的数量。
+- **健康档案**：`HealthRecord` 表记录 `vaccine` / `deworming` / `checkup` / `grooming`、本次日期、可空的下次时间和备注。仅提供受 `AdminGuard` 保护的 `/api/admin/health-records` 增删改查，没有公开接口；所有成员可维护并记录操作。前端以已到期、今天、7 天内、以后分级提醒，侧栏显示需要关注的数量。
 
 ### 媒体管线（media.ts）
 

@@ -140,7 +140,7 @@ export function healthReminder(
   const days = daysSince(at, nextDueOn);
   if (days < 0) return { status: "overdue", days, text: `已超期 ${-days} 天` };
   if (days === 0) return { status: "today", days, text: "今天到期" };
-  if (days <= 30) return { status: "soon", days, text: `${days} 天后` };
+  if (days <= 7) return { status: "soon", days, text: `${days} 天后` };
   return { status: "later", days, text: `${days} 天后` };
 }
 export function age(date: string, at = today()) {

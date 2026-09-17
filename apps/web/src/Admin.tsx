@@ -1872,7 +1872,7 @@ function HealthManager() {
             />
           </label>
           <p className={s.hint}>
-            下次时间到期、当天或进入 30 天内时，会在本页和侧栏提醒。
+            下次时间到期、当天或进入 7 天内时，会在本页和侧栏提醒。
           </p>
           <Space wrap>
             <Button type="primary" htmlType="submit" loading={busy}>
