@@ -15,12 +15,11 @@ async function main() {
   for await (const chunk of process.stdin) chunks.push(chunk);
   const body = Buffer.concat(chunks);
   if (!body.length) throw new Error("备份文件为空，未上传");
-  await ossClient().put(`backups/${name}`, body, {
+  const key = `${config().ossPrefix}backups/${name}`;
+  await ossClient().put(key, body, {
     headers: { "Content-Type": "application/octet-stream" },
   });
-  console.log(
-    `已上传到 OSS：backups/${name}（${Math.ceil(body.length / 1024)} KB）`,
-  );
+  console.log(`已上传到 OSS：${key}（${Math.ceil(body.length / 1024)} KB）`);
 }
 main().catch((e) => {
   console.error(e.message);

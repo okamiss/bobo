@@ -32,9 +32,13 @@ export class MediaService {
   path(key: string) {
     return join(config().root, key);
   }
+  // Every OSS object of this site lives under OSS_PREFIX (default "bobo/").
+  objectKey(key: string) {
+    return config().ossPrefix + key;
+  }
   async put(key: string, file: string, contentType?: string) {
     if (this.oss)
-      await this.oss.put(key, file, {
+      await this.oss.put(this.objectKey(key), file, {
         headers: {
           ...(contentType ? { "Content-Type": contentType } : {}),
           "Cache-Control": "private, max-age=0",
@@ -46,7 +50,7 @@ export class MediaService {
     }
   }
   async remove(key: string) {
-    if (this.oss) await this.oss.delete(key);
+    if (this.oss) await this.oss.delete(this.objectKey(key));
     else await unlink(this.path(key)).catch(() => {});
   }
   async authorize(data: {
@@ -74,7 +78,7 @@ export class MediaService {
           "PUT",
           600,
           { headers: { "Content-Type": data.mime } },
-          `staging/${id}`,
+          this.objectKey(`staging/${id}`),
         )
       : `/api/admin/media/${id}/upload`;
     return {
@@ -130,14 +134,14 @@ export class MediaService {
     const input = join(temp, "input");
     try {
       if (this.oss) {
-        const h = await this.oss.head(`staging/${id}`);
+        const h = await this.oss.head(this.objectKey(`staging/${id}`));
         if (
           Number(
             (h.res.headers as Record<string, string>)["content-length"],
           ) !== m.size
         )
           throw new Error("文件大小不符");
-        const r = await this.oss.getStream(`staging/${id}`);
+        const r = await this.oss.getStream(this.objectKey(`staging/${id}`));
         let n = 0;
         await pipeline(
           r.stream,
@@ -306,7 +310,12 @@ export class MediaService {
           : "original";
     const key = `${m.key}.${suffix}`;
     if (this.oss)
-      return await this.oss.signatureUrlV4("GET", 300, {}, key);
+      return await this.oss.signatureUrlV4(
+        "GET",
+        300,
+        {},
+        this.objectKey(key),
+      );
     const expires = Date.now() + 300000;
     return `/api/media/${m.id}/file/${suffix}?expires=${expires}&token=${sign(`${m.id}:${suffix}:${expires}`)}`;
   }

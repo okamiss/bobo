@@ -44,12 +44,13 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 
 ### 媒体管线（media.ts）
 
-1. **授权**：`authorize` 创建 `Media` 行，状态为 `pending`，并返回上传地址。`local` 驱动是 `PUT /api/admin/media/:id/upload`（写入 `<id>.staging`）；`oss` 驱动是预签名 PUT，目标为 `staging/<id>`。
+1. **授权**：`authorize` 创建 `Media` 行，状态为 `pending`，并返回上传地址。`local` 驱动是 `PUT /api/admin/media/:id/upload`（写入 `<id>.staging`）；`oss` 驱动是预签名 PUT，目标为 `<前缀>staging/<id>`。
 2. **处理**：`complete` 先用 `updateMany` 把状态从 `pending` 改为 `processing` 作为并发锁，再回读 staging 文件并按真实内容校验：图片用 sharp（仅静态 JPEG/PNG/WebP），视频用 ffprobe（MP4/H.264，音轨可选 AAC，≤180 秒）。
 3. **写入**：生成 `<key>.original`、`<key>.thumb`（640px WebP）、`<key>.display`（仅图片，2000px WebP），状态改为 `ready`；失败则回到 `pending`。
 4. **单实例假设**：API 启动时会把残留的 `uploading`/`processing` 重置为 `pending`。
 5. **读取**：`present()` 为 `url`/`thumb` 签发 5 分钟有效的地址（local 用 HMAC token，由 `/api/media/:id/file/:variant` 提供；oss 用 V4 签名 GET）。前端必须通过 `shared.tsx` 的 `MediaImage` / `MediaVideo` 渲染媒体，它们在地址过期时会调用一次 `/api/media/:id/access` 换新地址。
 6. **切换存储**：更换 `STORAGE_DRIVER` 不会迁移已有文件。
+7. **OSS 前缀**：Bucket 与其他项目共用，本站所有对象都在 `OSS_PREFIX`（默认 `bobo`，`config().ossPrefix` 规范化为 `bobo/`）下。OSS 调用一律通过 `MediaService.objectKey()` 加前缀，不要直接拼对象名。旧版本放在根目录的对象用 `scripts/move-oss-objects.cjs` 迁移（`node - copy|delete` 经 stdin 在 api 容器内运行，旧镜像也能用）。
 
 ### 数据库与初始化
 
@@ -72,7 +73,7 @@ Schema 在 `apps/api/prisma/schema.prisma`，迁移是已提交的 SQL 目录。
 - 完整配置与排错记录见 `docs/ubuntu-acr-deployment.md`；`docs/verification.md` 记录实际验收结果。
 - 两个 Dockerfile 的基础镜像都固定了摘要；`.sh` 脚本必须保持 LF（见 `.gitattributes`）。
 - **备份**：`scripts/backup.*` 用 `pg_dump` 导出到 `backups/`，`restore.*` 恢复到独立的 `bobo_restore` 库。数据库备份不含媒体文件。`docker compose down -v` 会删除数据库和媒体卷。
-  - `backup.sh` 先写 `.partial` 再改名；保留最近 `BACKUP_KEEP`（默认 14）份；OSS 模式下通过 `docker compose exec -T api node dist/backup-upload.js <名称> < 文件` 把备份流式上传到 Bucket 的 `backups/`（`src/backup-upload.ts`），上传失败只警告、不中断更新。
+  - `backup.sh` 先写 `.partial` 再改名；保留最近 `BACKUP_KEEP`（默认 14）份；OSS 模式下通过 `docker compose exec -T api node dist/backup-upload.js <名称> < 文件` 把备份流式上传到 Bucket 的 `<前缀>backups/`（`src/backup-upload.ts`），上传失败只警告、不中断更新。
   - 服务器每日备份由 `scripts/install-backup-cron.sh` 写入 crontab（标记注释 `# bobo daily backup`，可重复执行）。
 
 ## 工作约定

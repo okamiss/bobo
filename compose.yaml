@@ -13,6 +13,7 @@ x-app-env: &app-env
   OSS_BUCKET: ${OSS_BUCKET:-}
   OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-}
   OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:-}
+  OSS_PREFIX: ${OSS_PREFIX-bobo}
 services:
   db:
     image: postgres:17.5-alpine

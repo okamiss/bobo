@@ -60,7 +60,30 @@ OSS_REGION=oss-cn-hangzhou
 OSS_BUCKET=your-private-bucket
 OSS_ACCESS_KEY_ID=your-ram-key
 OSS_ACCESS_KEY_SECRET=your-ram-secret
+# 可选：本站文件在 Bucket 中的目录，默认 bobo；留空表示 Bucket 根目录
+# OSS_PREFIX=bobo
 ```
+
+本站的所有 OSS 对象（原图、展示图、缩略图、上传中转 `staging/`、数据库备份 `backups/`）都放在 `OSS_PREFIX` 目录下（默认 `bobo/`），可以和其他项目共用一个 Bucket。
+
+#### 把旧版本放在 Bucket 根目录的文件迁入 `bobo/`
+
+更早的版本把文件直接放在 Bucket 根目录。`scripts/move-oss-objects.cjs` 只处理当前数据库引用的媒体文件和根目录 `backups/bobo-*.dump`，不会碰同一 Bucket 中其他项目的文件；`copy` 只复制、可重复执行，`delete` 只在 `bobo/` 中的副本与根目录文件 ETag 和大小都一致时才删除根目录文件。服务器按以下顺序执行，网站全程可以正常访问：
+
+```bash
+cd /opt/bobo && git pull --ff-only
+docker compose exec -T api node - copy < scripts/move-oss-objects.cjs   # 旧版本仍在运行，先复制
+bash scripts/update-server.sh                                           # 切换到读取 bobo/ 的新版本
+docker compose exec -T api node - copy < scripts/move-oss-objects.cjs   # 补上期间新上传的文件
+```
+
+打开网站确认图片和视频都正常后，再删除根目录旧文件：
+
+```bash
+docker compose exec -T api node - delete < scripts/move-oss-objects.cjs
+```
+
+同一个 Bucket 被多个环境（例如本地开发和服务器）共用时，每个环境都要执行 `copy`；等所有环境都更新到新版本后，再在各环境执行 `delete`。
 
 切换后执行完整联调：
 
@@ -79,7 +102,7 @@ Bucket 的 CORS：
 - AllowedHeader：`Content-Type`、`Range`。
 - ExposeHeader：`ETag`、`Content-Length`、`Content-Range`、`Accept-Ranges`。
 
-流程：登录后获取 10 分钟 PUT 签名 → 浏览器上传到 `staging/` → 后端下载并校验 → 从校验后的文件生成最终对象 → 媒体标为可用。重新上传 staging 文件不能覆盖已验证展示文件。建议为 `staging/` 配置 1 天生命周期，清除中断上传；不为正式文件配置自动删除。
+流程：登录后获取 10 分钟 PUT 签名 → 浏览器上传到 `bobo/staging/` → 后端下载并校验 → 从校验后的文件生成最终对象 → 媒体标为可用。重新上传 staging 文件不能覆盖已验证展示文件。建议为 `bobo/staging/` 前缀配置 1 天生命周期，清除中断上传（如果以前给根目录 `staging/` 配过规则，改成新前缀）；不为正式文件配置自动删除。
 
 公开接口只为公开已发布故事签发读取地址；默认有效期 5 分钟。记录改为私密后立即停止签发新地址，已经取得的地址到期失效。页面停留较久时，图片和视频遇到过期地址会自动重新获取一次。相册可见性不能覆盖原故事的私密设置。图片原片不对匿名访客提供下载。
 
@@ -113,7 +136,7 @@ Nginx 挂载只读证书，公开环境只暴露 HTTP/HTTPS 入口；API 与 Pos
 bash scripts/backup.sh
 ```
 
-备份保存在 `backups/`，格式为 PostgreSQL custom dump。`backup.sh` 默认只保留最近 14 份本地备份（用 `BACKUP_KEEP=30 bash scripts/backup.sh` 调整）；使用 OSS 存储时还会把同一份备份上传到私有 Bucket 的 `backups/` 目录，上传失败只提示警告，本地备份照常保留。`scripts/update-server.sh` 更新前会自动执行一次。
+备份保存在 `backups/`，格式为 PostgreSQL custom dump。`backup.sh` 默认只保留最近 14 份本地备份（用 `BACKUP_KEEP=30 bash scripts/backup.sh` 调整）；使用 OSS 存储时还会把同一份备份上传到私有 Bucket 的 `bobo/backups/` 目录，上传失败只提示警告，本地备份照常保留。`scripts/update-server.sh` 更新前会自动执行一次。
 
 在服务器上安装每天自动备份（默认按服务器时区每天 03:30，可重复执行，不会重复添加）：
 
@@ -122,7 +145,7 @@ cd /opt/bobo && bash scripts/install-backup-cron.sh
 # 自定义时间：BACKUP_SCHEDULE="15 4 * * *" bash scripts/install-backup-cron.sh
 ```
 
-运行记录写入 `backups/cron.log`，可用 `crontab -l` 查看任务。OSS 上的备份不会被脚本自动清理，建议在 Bucket 的生命周期规则中为 `backups/` 前缀设置过期时间（例如 90 天）。服务器故障时，可从 OSS 控制台下载 `backups/` 中的备份文件，放到新服务器的 `backups/` 目录后按下面的方式恢复。
+运行记录写入 `backups/cron.log`，可用 `crontab -l` 查看任务。OSS 上的备份不会被脚本自动清理，建议在 Bucket 的生命周期规则中为 `bobo/backups/` 前缀设置过期时间（例如 90 天）。服务器故障时，可从 OSS 控制台下载 `bobo/backups/` 中的备份文件，放到新服务器的 `backups/` 目录后按下面的方式恢复。
 
 替换代码后运行原部署命令，会应用新迁移；不会自动重置数据库或覆盖已有管理员密码。修改 `ADMIN_PASSWORD` 不是已有账号的密码重置方式。家庭管理员自己忘记密码时，在服务器项目目录执行 `docker compose exec api node dist/reset-password.js <用户名>`，终端会显示一个随机新密码，并让该账号所有设备退出登录；登录后请立即在「修改密码」中更换。版本回退需考虑迁移兼容性，不保证旧代码能读取新数据库结构。
 

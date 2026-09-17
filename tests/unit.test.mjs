@@ -9,6 +9,7 @@ const {
   hashPassword,
   checkPassword,
   config,
+  ossPrefix,
 } = require("../apps/api/dist/config.js");
 const source = ts.transpileModule(
   readFileSync(new URL("../apps/web/src/lib.ts", import.meta.url), "utf8"),
@@ -72,4 +73,11 @@ test("OSS fails closed when configuration is missing", () => {
   delete process.env.OSS_REGION;
   assert.throws(() => config(), /OSS/);
   process.env = before;
+});
+test("OSS prefix is normalized to a folder and rejects unsafe paths", () => {
+  assert.equal(ossPrefix("bobo"), "bobo/");
+  assert.equal(ossPrefix("/sites/bobo/"), "sites/bobo/");
+  assert.equal(ossPrefix(""), "");
+  assert.throws(() => ossPrefix("../bobo"), /OSS_PREFIX/);
+  assert.throws(() => ossPrefix("bo bo"), /OSS_PREFIX/);
 });

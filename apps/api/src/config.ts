@@ -51,7 +51,18 @@ export function config() {
     storage,
     secret: e.SESSION_SECRET!,
     root: e.MEDIA_ROOT || "/data/media",
+    ossPrefix: ossPrefix(e.OSS_PREFIX ?? "bobo"),
   };
+}
+// Folder for this site's objects in a bucket that may be shared with other
+// projects; empty keeps objects at the bucket root.
+export function ossPrefix(value: string) {
+  const prefix = value.replace(/^\/+|\/+$/g, "");
+  if (!prefix) return "";
+  const segments = prefix.split("/");
+  if (segments.some((s) => !/^[\w.-]+$/.test(s) || s === "." || s === ".."))
+    throw new Error("OSS_PREFIX 只能包含字母、数字、点、横线、下划线和斜杠");
+  return `${prefix}/`;
 }
 export function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
