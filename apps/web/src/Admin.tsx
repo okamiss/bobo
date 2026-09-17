@@ -440,7 +440,7 @@ function AdminEntries() {
                   {e.status === "draft"
                     ? "草稿"
                     : e.visibility === "private"
-                      ? "私密"
+                      ? "不公开"
                       : "已公开"}
                 </Tag>
                 <Link to={`/admin/entries/${e.id}`} className={s.textLink}>
@@ -1075,13 +1075,14 @@ function EntryEditor() {
                 change({ visibility })
               }
               options={[
-                { value: "private", label: "只有自己" },
-                { value: "public", label: "所有访客" },
+                { value: "private", label: "不公开（仅家庭账号）" },
+                { value: "public", label: "公开（所有人）" },
               ]}
             />
           </label>
           <p className={s.hint}>
-            <Lock size={14} /> 草稿始终仅自己可见，修改后点击保存生效。
+            <Lock size={14} />{" "}
+            草稿始终不公开，只有家庭账号能看到；修改后点击保存生效。
           </p>
         </aside>
       </div>
@@ -1150,7 +1151,7 @@ function AdminAlbums() {
                 <h3>{a.title}</h3>
                 <small>
                   {a.items.length} 个瞬间 ·{" "}
-                  {a.visibility === "public" ? "公开" : "私密"}
+                  {a.visibility === "public" ? "公开" : "不公开"}
                 </small>
               </Link>
               <Link to={`/admin/albums/${a.id}`} className={s.textLink}>
@@ -1253,15 +1254,15 @@ function AlbumEditor() {
             />
           </label>
           <label>
-            可见性
+            谁可以看
             <Select
               value={form.visibility}
               onChange={(visibility: Album["visibility"]) =>
                 update({ visibility })
               }
               options={[
-                { value: "private", label: "只有自己" },
-                { value: "public", label: "公开" },
+                { value: "private", label: "不公开（仅家庭账号）" },
+                { value: "public", label: "公开（所有人）" },
               ]}
             />
           </label>
@@ -1273,7 +1274,7 @@ function AlbumEditor() {
             onChange={(e) => update({ description: e.target.value })}
           />
         </label>
-        <p className={s.hint}>公开相册会自动隐藏私密或草稿故事中的媒体。</p>
+        <p className={s.hint}>公开相册会自动隐藏不公开或草稿故事中的媒体。</p>
         <h3>已选择 · {form.items.length}</h3>
         <div className={s.editorMedia}>
           {form.items.map((m, i) => (
@@ -1833,7 +1834,7 @@ function GrowthManager() {
                 type: "success",
                 text: next
                   ? "成长曲线已在「关于啵啵」页面公开，备注不会公开。"
-                  : "成长曲线已改为只有家人可见。",
+                  : "成长曲线已改为不公开，只有家庭账号能看到。",
               });
             } catch (err: any) {
               setVisible(!next);
