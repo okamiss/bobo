@@ -577,6 +577,7 @@ function EntryEditor() {
   const user = useContext(UserContext);
   const usePublishDefaults = location.state?.usePublishDefaults === true;
   const remote = useData<Entry>(`/admin/entries/${id}`);
+  const tagPool = useData<Listing>("/admin/entries?limit=1");
   const [form, setForm] = useState<Entry | null>(null),
     [draft, setDraft] = useState<Draft | null>(null),
     [dirty, setDirty] = useState(false),
@@ -1018,15 +1019,25 @@ function EntryEditor() {
             />
           </label>
           <label>
-            标签，用逗号分隔
-            <Input
-              value={form.tags.join(",")}
-              onChange={(e) =>
+            标签（可选择或输入后回车）
+            <Select
+              mode="tags"
+              value={form.tags}
+              onChange={(tags: string[]) =>
                 change({
-                  tags: e.target.value.split(/[,，]/).map((x) => x.trim()),
+                  tags: [
+                    ...new Set(tags.map((tag) => tag.trim()).filter(Boolean)),
+                  ],
                 })
               }
-              placeholder="散步，美食，旅行"
+              options={[
+                ...new Set([...(tagPool.data?.tags || []), ...form.tags]),
+              ].map((tag) => ({ value: tag, label: tag }))}
+              tokenSeparators={[",", "，"]}
+              showSearch={{ optionFilterProp: "label" }}
+              maxCount={20}
+              maxTagCount="responsive"
+              placeholder="选择已有标签，或输入新标签"
             />
           </label>
           <Checkbox
