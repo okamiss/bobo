@@ -2111,7 +2111,6 @@ hr {
     background: #eeefe5f2;
     border-right: 0;
     border-bottom: 1px solid #dfe2d6;
-    backdrop-filter: blur(14px);
   }
   .sidebar .brand {
     font-size: 17px;
