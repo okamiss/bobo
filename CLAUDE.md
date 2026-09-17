@@ -32,6 +32,7 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 - **`main.ts` 集中了整个 HTTP 层**：`PublicController`（`/api`）、带 `AdminGuard` 的 `AdminController`（`/api/admin`）、负责组装响应的 `Content` 服务、全局异常过滤器（ZodError → 400，Prisma `P2025` → 404，其余 → 500 并返回通用中文提示），以及 `main()` 里的全局中间件：helmet、按真实 IP 的登录限流（`trust proxy` = 1，依赖 Nginx 覆盖 `X-Forwarded-For`）、1mb JSON 上限、Origin 校验、`Cache-Control: no-store`。
 - **校验**：用 `validation.ts` 中的 zod schema 在处理函数内 `.parse()`，不使用 Nest pipes。`config()` 每次调用都会重新校验环境变量，缺项直接抛错。
 - **会话**：cookie `bobo_session` 存随机 token，数据库 `Session.id` 存它的 HMAC（`sign()`），有效期 7 天。
+- **密码**：`PUT /api/auth/password` 修改自己的密码（校验当前密码，保留当前会话、删除其他会话，有独立的失败次数限流）；`PUT /api/admin/accounts/:id/password` 由 owner 重置成员密码（删除该成员全部会话，不能用于 owner）。owner 忘记密码时，在服务器执行 `docker compose exec api node dist/reset-password.js <用户名>`（`src/reset-password.ts`）生成随机密码。
 - **角色**：`owner`（家庭管理员）和 `member`。
   - 权限辅助函数：`owner(req)`、`editableEntry(req, id)`、`editableMedia(req, id)`。
   - 成员只能修改 `authorId` 等于自己的记录及其媒体；站点资料、相册、账号只有 owner 能改。

@@ -73,11 +73,19 @@ const username = z
   .max(50)
   .regex(/^[\p{L}\p{N}._-]+$/u, "用户名只能包含文字、数字、点、横线或下划线");
 
+const password = z.string().min(12, "密码至少 12 位").max(200);
+
 export const accountInput = z.object({
   username,
   displayName: z.string().trim().min(1, "显示名字不能为空").max(30),
-  password: z.string().min(12, "密码至少 12 位").max(200),
+  password,
 });
+
+export const passwordChangeInput = z.object({
+  currentPassword: z.string().max(200),
+  newPassword: password,
+});
+export const passwordResetInput = z.object({ password });
 
 export const accountStatusInput = z.object({ active: z.boolean() });
 export const accountNameInput = z.object({

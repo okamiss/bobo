@@ -45,6 +45,7 @@ import {
   Settings,
   Feather,
   Users,
+  KeyRound,
 } from "lucide-react";
 import {
   api,
@@ -164,8 +165,87 @@ function Login({ onLogin }: { onLogin: () => void }) {
   );
 }
 
+function PasswordModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { message } = AntApp.useApp();
+  const [current, setCurrent] = useState(""),
+    [next, setNext] = useState(""),
+    [repeat, setRepeat] = useState(""),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  return (
+    <Modal
+      title="修改密码"
+      open={open}
+      okText="保存新密码"
+      cancelText="取消"
+      confirmLoading={busy}
+      onCancel={onClose}
+      afterClose={() => {
+        setCurrent("");
+        setNext("");
+        setRepeat("");
+        setError("");
+      }}
+      onOk={async () => {
+        if (next.length < 12) return setError("新密码至少 12 位");
+        if (next !== repeat) return setError("两次输入的新密码不一致");
+        setBusy(true);
+        setError("");
+        try {
+          await api(
+            "/auth/password",
+            json("PUT", { currentPassword: current, newPassword: next }),
+          );
+          message.success("密码已修改，其他设备上的登录已退出。");
+          onClose();
+        } catch (e: any) {
+          setError(e.message);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <label className={s.modalField}>
+        当前密码
+        <Input.Password
+          value={current}
+          autoComplete="current-password"
+          onChange={(e) => setCurrent(e.target.value)}
+        />
+      </label>
+      <label className={s.modalField}>
+        新密码
+        <Input.Password
+          value={next}
+          maxLength={200}
+          placeholder="至少 12 位"
+          autoComplete="new-password"
+          onChange={(e) => setNext(e.target.value)}
+        />
+      </label>
+      <label className={s.modalField}>
+        再输入一次新密码
+        <Input.Password
+          value={repeat}
+          maxLength={200}
+          autoComplete="new-password"
+          onChange={(e) => setRepeat(e.target.value)}
+        />
+      </label>
+      {error ? <Alert type="error" showIcon message={error} /> : null}
+    </Modal>
+  );
+}
+
 function AdminContent() {
   const [user, setUser] = useState<AuthUser | null | undefined>();
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const p = useData<Profile>("/profile");
   const check = () =>
     api<AuthUser>("/auth/me")
@@ -209,6 +289,18 @@ function AdminContent() {
               <Link to="/" className={s.textLink}>
                 看看我的小站 <ArrowUpRight size={15} />
               </Link>
+              <Button
+                type="text"
+                icon={<KeyRound size={16} />}
+                aria-label="修改密码"
+                onClick={() => setPasswordOpen(true)}
+              >
+                修改密码
+              </Button>
+              <PasswordModal
+                open={passwordOpen}
+                onClose={() => setPasswordOpen(false)}
+              />
               <Button
                 type="text"
                 icon={<LogOut size={16} />}
@@ -1105,6 +1197,10 @@ function AccountManager({
   const [editing, setEditing] = useState<Account | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editBusy, setEditBusy] = useState(false);
+  const [resetting, setResetting] = useState<Account | null>(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
 
   return (
     <>
@@ -1214,6 +1310,16 @@ function AccountManager({
                   </Button>
                   {account.role !== "owner" ? (
                     <>
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          setResetting(account);
+                          setResetPassword("");
+                          setResetError("");
+                        }}
+                      >
+                        重置密码
+                      </Button>
                       <Popconfirm
                         title={
                           account.active ? "停用这个账号？" : "启用这个账号？"
@@ -1319,9 +1425,66 @@ function AccountManager({
           />
         </label>
       </Modal>
+      <Modal
+        title={`重置${resetting ? `「${resetting.displayName}」` : ""}的密码`}
+        open={resetting !== null}
+        okText="重置密码"
+        cancelText="取消"
+        confirmLoading={resetBusy}
+        onCancel={() => setResetting(null)}
+        onOk={async () => {
+          if (!resetting) return;
+          setResetBusy(true);
+          setResetError("");
+          try {
+            await api(
+              `/admin/accounts/${resetting.id}/password`,
+              json("PUT", { password: resetPassword }),
+            );
+            setNotice({
+              type: "success",
+              text: `${resetting.displayName}的密码已重置，请把新密码告诉对方。对方所有设备上的登录已退出。`,
+            });
+            setResetting(null);
+          } catch (e: any) {
+            setResetError(e.message);
+          } finally {
+            setResetBusy(false);
+          }
+        }}
+      >
+        <label className={s.modalField}>
+          新密码
+          <Input
+            value={resetPassword}
+            maxLength={200}
+            placeholder="至少 12 位"
+            autoComplete="new-password"
+            onChange={(event) => setResetPassword(event.target.value)}
+          />
+        </label>
+        <Button size="small" onClick={() => setResetPassword(randomPassword())}>
+          随机生成
+        </Button>
+        <p className={s.hint}>
+          密码以明文显示，方便抄给家人。重置后对方需要用新密码重新登录。
+        </p>
+        {resetError ? (
+          <Alert type="error" showIcon message={resetError} />
+        ) : null}
+      </Modal>
     </>
   );
 }
+
+// Unambiguous characters, so a reset password is easy to read out to family.
+const passwordAlphabet =
+  "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const randomPassword = () =>
+  Array.from(
+    crypto.getRandomValues(new Uint8Array(14)),
+    (b) => passwordAlphabet[b % passwordAlphabet.length],
+  ).join("");
 
 const coverTypes = ["image/jpeg", "image/png", "image/webp"];
 

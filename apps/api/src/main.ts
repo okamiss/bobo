@@ -46,6 +46,8 @@ import {
   accountInput,
   accountStatusInput,
   accountNameInput,
+  passwordChangeInput,
+  passwordResetInput,
 } from "./validation";
 const idSchema = z.string().uuid();
 async function session(req: Request) {
@@ -393,6 +395,29 @@ class PublicController {
   @Get("auth/me") async me(@Req() req: Request) {
     return authUser(await currentAdmin(req));
   }
+  @Put("auth/password") async changePassword(
+    @Req() req: Request,
+    @Body() body: unknown,
+  ) {
+    const admin = await currentAdmin(req);
+    const v = passwordChangeInput.parse(body);
+    if (!checkPassword(v.currentPassword, admin.passwordHash))
+      throw new BadRequestException("当前密码不正确");
+    // Keep this session and sign out every other device.
+    await db.$transaction([
+      db.admin.update({
+        where: { id: admin.id },
+        data: { passwordHash: hashPassword(v.newPassword) },
+      }),
+      db.session.deleteMany({
+        where: {
+          adminId: admin.id,
+          id: { not: sign(req.cookies.bobo_session) },
+        },
+      }),
+    ]);
+    return { ok: true };
+  }
   @Post("auth/logout") async logout(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -484,6 +509,28 @@ class AdminController {
     const value = accountNameInput.parse(body);
     const account = await db.admin.update({ where: { id }, data: value });
     return { ...authUser(account), active: account.active };
+  }
+  @Put("accounts/:id/password") async resetAccountPassword(
+    @Req() req: Request,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    await owner(req);
+    idSchema.parse(id);
+    const value = passwordResetInput.parse(body);
+    const target = await db.admin.findUniqueOrThrow({ where: { id } });
+    if (target.role === "owner")
+      throw new BadRequestException(
+        "家庭管理员请通过「修改密码」更改自己的密码",
+      );
+    await db.$transaction([
+      db.admin.update({
+        where: { id },
+        data: { passwordHash: hashPassword(value.password) },
+      }),
+      db.session.deleteMany({ where: { adminId: id } }),
+    ]);
+    return { ok: true };
   }
   @Delete("accounts/:id") async removeAccount(
     @Req() req: Request,
@@ -746,16 +793,19 @@ async function main() {
     }),
   );
   app.use(cookieParser());
-  app.use(
-    "/api/auth/login",
+  const failedAttempts = (limit: number, message: string) =>
     rateLimit({
       windowMs: 15 * 60000,
-      limit: 15,
+      limit,
       skipSuccessfulRequests: true,
       standardHeaders: "draft-7",
       legacyHeaders: false,
-      message: { message: "登录尝试过多，请稍后再试" },
-    }),
+      message: { message },
+    });
+  app.use("/api/auth/login", failedAttempts(15, "登录尝试过多，请稍后再试"));
+  app.use(
+    "/api/auth/password",
+    failedAttempts(10, "密码尝试次数过多，请稍后再试"),
   );
   app.use((req: Request, res: Response, next: () => void) => {
     res.setHeader("Cache-Control", "no-store");

@@ -92,6 +92,54 @@ try {
   assert.equal(memberLogin.data.displayName, displayName);
   await request("/admin/accounts", { cookie: memberCookie, status: 403 });
 
+  // Changing your own password keeps this session and signs out other devices.
+  const login = (password, status = 201) =>
+    request("/auth/login", {
+      method: "POST",
+      cookie: "",
+      body: { username: member.data.username, password },
+      status,
+    });
+  const cookieOf = (response) =>
+    response.headers.get("set-cookie").split(";")[0];
+  const otherDevice = cookieOf((await login(`Family-${suffix}-safe`)).response);
+  await request("/auth/password", {
+    method: "PUT",
+    cookie: memberCookie,
+    body: { currentPassword: "not-the-password", newPassword: "x".repeat(12) },
+    status: 400,
+  });
+  await request("/auth/password", {
+    method: "PUT",
+    cookie: memberCookie,
+    body: {
+      currentPassword: `Family-${suffix}-safe`,
+      newPassword: `Family-${suffix}-changed`,
+    },
+  });
+  await request("/auth/me", { cookie: memberCookie });
+  await request("/auth/me", { cookie: otherDevice, status: 401 });
+  await login(`Family-${suffix}-safe`, 401);
+
+  // Only the owner resets member passwords, which signs the member out.
+  await request(`/admin/accounts/${accountId}/password`, {
+    method: "PUT",
+    cookie: memberCookie,
+    body: { password: "x".repeat(12) },
+    status: 403,
+  });
+  await request(`/admin/accounts/${ownerLogin.data.id}/password`, {
+    method: "PUT",
+    body: { password: "x".repeat(12) },
+    status: 400,
+  });
+  await request(`/admin/accounts/${accountId}/password`, {
+    method: "PUT",
+    body: { password: `Family-${suffix}-reset` },
+  });
+  await request("/auth/me", { cookie: memberCookie, status: 401 });
+  memberCookie = cookieOf((await login(`Family-${suffix}-reset`)).response);
+
   // Members can read the owner's story but cannot change it or its media.
   const ownerEntry = await request("/admin/entries", {
     method: "POST",
@@ -184,7 +232,7 @@ try {
   accountId = "";
 
   console.log(
-    "家庭账号创建、成员只能修改自己的记录、管理员专属设置、署名保留、停用与清理通过",
+    "家庭账号创建、修改与重置密码、成员只能修改自己的记录、管理员专属设置、署名保留、停用与清理通过",
   );
 } finally {
   for (const id of entryIds)
