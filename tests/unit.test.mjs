@@ -20,7 +20,7 @@ const source = ts.transpileModule(
     },
   },
 ).outputText;
-const { age, daysSince, anniversaries } = await import(
+const { age, daysSince, anniversaries, valueTicks, monthTicks } = await import(
   `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
 );
 test("dates reject impossible calendar days and accept leap day", () => {
@@ -75,6 +75,25 @@ test("anniversaries at month end agree with the age shown on the site", () => {
   assert.deepEqual(leap.find((a) => a.title === "1 岁生日").date, "2025-03-01");
   assert.equal(age("2024-02-29", "2025-02-28"), "11 个月");
   assert.equal(age("2024-02-29", "2025-03-01"), "1 岁");
+});
+test("growth chart axes use round values and month starts", () => {
+  assert.deepEqual(valueTicks(5.6), [0, 2, 4, 6]);
+  assert.deepEqual(valueTicks(6), [0, 2, 4, 6]);
+  assert.deepEqual(valueTicks(34.5), [0, 10, 20, 30, 40]);
+  assert.deepEqual(valueTicks(0.9), [0, 0.25, 0.5, 0.75, 1]);
+  assert.deepEqual(monthTicks("2026-06-18", "2026-09-17"), [
+    "2026-07-01",
+    "2026-08-01",
+    "2026-09-01",
+  ]);
+  assert.deepEqual(monthTicks("2026-06-01", "2026-06-20"), ["2026-06-01"]);
+  assert.deepEqual(monthTicks("2026-09-02", "2026-09-17"), []);
+  assert.deepEqual(monthTicks("2026-01-15", "2027-01-15", 4), [
+    "2026-02-01",
+    "2026-05-01",
+    "2026-08-01",
+    "2026-11-01",
+  ]);
 });
 test("upload limits distinguish images and video and reject unsupported MIME", () => {
   const input = {

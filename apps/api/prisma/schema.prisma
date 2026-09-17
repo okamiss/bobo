@@ -37,6 +37,17 @@ model Profile {
   hobbies           String  @default("")
   coverMediaId      String?
   aboutCoverMediaId String?
+  growthPublic      Boolean @default(false)
+}
+
+// One growth measurement per day; weight in kg, shoulder height in cm.
+model Measurement {
+  id         String   @id @default(uuid())
+  measuredOn String   @unique
+  weight     Float?
+  height     Float?
+  note       String   @default("")
+  createdAt  DateTime @default(now())
 }
 
 model Entry {

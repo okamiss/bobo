@@ -62,6 +62,14 @@ export type Album = {
   coverMediaId: string | null;
   items: Media[];
 };
+export type Measurement = {
+  id?: string;
+  measuredOn: string;
+  weight: number | null;
+  height: number | null;
+  note?: string;
+};
+export type Growth = { public: boolean; items: Measurement[] };
 export type Memory = Entry & {
   yearsAgo: number | null;
   monthsAgo: number | null;
@@ -173,6 +181,28 @@ export function anniversaries(
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, limit)
     .map((e) => ({ ...e, daysLeft: daysSince(at, e.date) }));
+}
+// Chart value ticks from zero to a round top, in 1/2/2.5/5 × 10ⁿ steps.
+export function valueTicks(max: number, count = 4) {
+  const rough = max / count;
+  const power = 10 ** Math.floor(Math.log10(rough));
+  const step = [1, 2, 2.5, 5, 10]
+    .map((m) => m * power)
+    .find((s) => s >= rough)!;
+  const steps = Math.ceil(max / step - 1e-9);
+  return Array.from({ length: steps + 1 }, (_, i) => +(i * step).toFixed(6));
+}
+// First day of each month between two dates, thinned to at most `limit`.
+export function monthTicks(first: string, last: string, limit = 6) {
+  const ticks: string[] = [];
+  const [y, m, d] = first.split("-").map(Number);
+  for (let i = d === 1 ? 0 : 1; ; i++) {
+    const date = new Date(Date.UTC(y, m - 1 + i, 1)).toISOString().slice(0, 10);
+    if (date > last) break;
+    ticks.push(date);
+  }
+  const every = Math.ceil(ticks.length / Math.max(1, limit));
+  return ticks.filter((_, i) => i % every === 0);
 }
 export const coverOf = (e: Entry) =>
   e.media.find((m) => m.id === e.coverMediaId) || e.media[0];

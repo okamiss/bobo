@@ -850,6 +850,121 @@ hr {
   color: #ad7650;
   font-size: 17px;
 }
+.growthSection {
+  margin-top: 64px;
+}
+.growthCharts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 28px 36px;
+}
+.growthChart {
+  min-width: 0;
+  margin: 0;
+}
+.growthChart figcaption {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 500;
+}
+.growthChart figcaption small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+.growthPlot {
+  position: relative;
+}
+.growthPlot svg {
+  display: block;
+  max-width: 100%;
+  overflow: visible;
+  border-radius: 4px;
+}
+.growthPlot svg:focus-visible {
+  outline: 3px solid #c98c63;
+  outline-offset: 4px;
+}
+.growthPlot svg text {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.growthPlot svg .growthLatest {
+  fill: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+.growthTooltip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: 2px;
+  padding: 7px 11px;
+  border: 1px solid #e3e2d4;
+  border-radius: 6px;
+  background: #fffdf7;
+  box-shadow: 0 4px 14px #454d301f;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.growthTooltip strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.growthDetails {
+  margin-top: 22px;
+}
+.growthDetails summary {
+  width: fit-content;
+  color: #647159;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tableScroll {
+  margin-top: 12px;
+  overflow-x: auto;
+}
+.growthTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.growthTable th,
+.growthTable td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+.growthTable th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.growthTable td {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.panel.growthForm > h3,
+.panel.growthPanel > h3 {
+  margin: 0 0 18px;
+  font-size: 16px;
+  font-weight: 500;
+}
+.growthPanel {
+  margin-top: 24px;
+}
+.panel.growthPanel > h3 {
+  margin-top: 30px;
+}
 .playBadge {
   position: absolute;
   top: 50%;

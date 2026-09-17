@@ -20,7 +20,17 @@ import {
   Play,
   Feather,
 } from "lucide-react";
-import { api, age, coverOf, type Entry, type Profile, type Media } from "./lib";
+import {
+  api,
+  age,
+  coverOf,
+  valueTicks,
+  monthTicks,
+  type Entry,
+  type Profile,
+  type Media,
+  type Measurement,
+} from "./lib";
 import s from "./App.module.css";
 import illustration from "./assets/illustration.webp";
 export const ProfileContext = createContext<Profile | null>(null);
@@ -192,6 +202,262 @@ function MediaVideo({ media }: { media: Media }) {
           .catch(() => {});
       }}
     />
+  );
+}
+
+// Growth line color: the site's sage pushed to a chroma that reads as green
+// (checked with the dataviz palette validator against the #fffdf7 surface).
+const growthColor = "#5f8c46";
+const unitText = (value: number, unit: string) => `${value} ${unit}`;
+
+// One measure over time. Weight and shoulder height are separate charts
+// rather than two scales on one plot.
+export function GrowthChart({
+  items,
+  metric,
+  title,
+  unit,
+}: {
+  items: Measurement[];
+  metric: "weight" | "height";
+  title: string;
+  unit: string;
+}) {
+  const profile = useContext(ProfileContext);
+  const plot = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(560),
+    [active, setActive] = useState<number | null>(null);
+  const points = items
+    .filter((m) => m[metric] !== null)
+    .map((m) => ({
+      date: m.measuredOn,
+      value: m[metric] as number,
+      t: Date.parse(`${m.measuredOn}T00:00:00Z`),
+    }));
+  const drawn = points.length > 0;
+  useEffect(() => {
+    if (!plot.current) return;
+    const observer = new ResizeObserver(([entry]) =>
+      setWidth(Math.max(260, Math.round(entry.contentRect.width))),
+    );
+    observer.observe(plot.current);
+    return () => observer.disconnect();
+  }, [drawn]);
+  if (!drawn) return null;
+  const H = 230,
+    L = 38,
+    R = 64,
+    T = 16,
+    B = 30;
+  const first = points[0],
+    last = points[points.length - 1];
+  const x = (t: number) =>
+    first.t === last.t
+      ? L + (width - L - R) / 2
+      : L + ((t - first.t) / (last.t - first.t)) * (width - L - R);
+  const ticks = valueTicks(Math.max(...points.map((p) => p.value)) * 1.08);
+  const top = ticks[ticks.length - 1];
+  const y = (v: number) => T + (1 - v / top) * (H - T - B);
+  const line = points
+    .map((p, i) => `${i ? "L" : "M"}${x(p.t)},${y(p.value)}`)
+    .join("");
+  const area = `${line}L${x(last.t)},${y(0)}L${x(first.t)},${y(0)}Z`;
+  const sameYear = first.date.slice(0, 4) === last.date.slice(0, 4);
+  const months = monthTicks(first.date, last.date, Math.floor(width / 90));
+  const dateLabels = months.length
+    ? months.map((d) => ({
+        d,
+        text: sameYear
+          ? `${Number(d.slice(5, 7))}月`
+          : `${d.slice(0, 4)}.${Number(d.slice(5, 7))}`,
+      }))
+    : [first, last]
+        .filter((p, i) => i === 0 || p.t !== first.t)
+        .map((p) => ({
+          d: p.date,
+          text: `${Number(p.date.slice(5, 7))}.${Number(p.date.slice(8))}`,
+        }));
+  const shown = active === null ? null : points[active];
+  const shownAt = shown ? x(shown.t) / width : 0;
+  const pick = (clientX: number, rect: DOMRect) => {
+    const px = clientX - rect.left;
+    let best = 0;
+    points.forEach((p, i) => {
+      if (Math.abs(x(p.t) - px) < Math.abs(x(points[best].t) - px)) best = i;
+    });
+    setActive(best);
+  };
+  return (
+    <figure className={s.growthChart}>
+      <figcaption>
+        {title}
+        <small>单位 {unit}</small>
+      </figcaption>
+      <div className={s.growthPlot} ref={plot}>
+        <svg
+          width={width}
+          height={H}
+          viewBox={`0 0 ${width} ${H}`}
+          role="img"
+          tabIndex={0}
+          aria-label={`${title}，共 ${points.length} 次记录，最近 ${last.date} 为 ${unitText(last.value, unit)}。可用左右方向键查看每次记录。`}
+          onPointerMove={(e) =>
+            pick(e.clientX, e.currentTarget.getBoundingClientRect())
+          }
+          onPointerLeave={() => setActive(null)}
+          onFocus={() => setActive(points.length - 1)}
+          onBlur={() => setActive(null)}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowLeft")
+              setActive((i) => Math.max(0, (i ?? points.length) - 1));
+            if (e.key === "ArrowRight")
+              setActive((i) => Math.min(points.length - 1, (i ?? -1) + 1));
+          }}
+        >
+          {ticks.map((v) => (
+            <g key={v}>
+              <line
+                x1={L}
+                x2={width - R}
+                y1={y(v)}
+                y2={y(v)}
+                stroke="#ebe9dc"
+                strokeWidth={1}
+              />
+              <text x={L - 8} y={y(v)} dy="0.32em" textAnchor="end">
+                {v}
+              </text>
+            </g>
+          ))}
+          {dateLabels.map(({ d, text }) => (
+            <text
+              key={d}
+              x={x(Date.parse(`${d}T00:00:00Z`))}
+              y={H - 8}
+              textAnchor="middle"
+            >
+              {text}
+            </text>
+          ))}
+          <path d={area} fill={growthColor} fillOpacity={0.1} />
+          <path
+            d={line}
+            fill="none"
+            stroke={growthColor}
+            strokeWidth={2}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+          {shown ? (
+            <line
+              x1={x(shown.t)}
+              x2={x(shown.t)}
+              y1={T}
+              y2={H - B}
+              stroke="#cfd0c2"
+              strokeWidth={1}
+            />
+          ) : null}
+          {points.map((p, i) => (
+            <circle
+              key={p.date}
+              cx={x(p.t)}
+              cy={y(p.value)}
+              r={i === active ? 6 : 4}
+              fill={growthColor}
+              stroke="#fffdf7"
+              strokeWidth={2}
+            />
+          ))}
+          <text
+            className={s.growthLatest}
+            x={x(last.t) + 10}
+            y={y(last.value)}
+            dy="0.32em"
+          >
+            {unitText(last.value, unit)}
+          </text>
+        </svg>
+        {shown ? (
+          <div
+            className={s.growthTooltip}
+            style={{
+              left: x(shown.t),
+              top: y(shown.value),
+              transform: `translate(${shownAt < 0.2 ? -15 : shownAt > 0.8 ? -85 : -50}%, calc(-100% - 12px))`,
+            }}
+          >
+            <strong>{unitText(shown.value, unit)}</strong>
+            <span>
+              {shown.date.replaceAll("-", ".")}
+              {profile?.birthday && age(profile.birthday, shown.date)
+                ? ` · ${age(profile.birthday, shown.date)}`
+                : ""}
+            </span>
+          </div>
+        ) : null}
+      </div>
+    </figure>
+  );
+}
+
+// The table view twin of the growth charts; newest measurements first.
+export function GrowthTable({
+  items,
+  open = false,
+  actions,
+}: {
+  items: Measurement[];
+  open?: boolean;
+  actions?: (m: Measurement) => ReactNode;
+}) {
+  const profile = useContext(ProfileContext);
+  const table = (
+    <div className={s.tableScroll}>
+      <table className={s.growthTable}>
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>年龄</th>
+            <th>体重</th>
+            <th>肩高</th>
+            {actions ? (
+              <>
+                <th>备注</th>
+                <th aria-label="操作" />
+              </>
+            ) : null}
+          </tr>
+        </thead>
+        <tbody>
+          {[...items].reverse().map((m) => (
+            <tr key={m.measuredOn}>
+              <td>{m.measuredOn.replaceAll("-", ".")}</td>
+              <td>
+                {(profile?.birthday && age(profile.birthday, m.measuredOn)) ||
+                  "—"}
+              </td>
+              <td>{m.weight === null ? "—" : unitText(m.weight, "kg")}</td>
+              <td>{m.height === null ? "—" : unitText(m.height, "cm")}</td>
+              {actions ? (
+                <>
+                  <td>{m.note || "—"}</td>
+                  <td>{actions(m)}</td>
+                </>
+              ) : null}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+  return open ? (
+    table
+  ) : (
+    <details className={s.growthDetails}>
+      <summary>查看全部 {items.length} 次记录</summary>
+      {table}
+    </details>
   );
 }
 

@@ -29,6 +29,7 @@ import {
   coverOf,
   albumCover,
   type Memory,
+  type Growth,
   type Entry,
   type Profile,
   type Listing,
@@ -48,6 +49,8 @@ import {
   MediaImage,
   StoryView,
   BoboIllustration,
+  GrowthChart,
+  GrowthTable,
 } from "./shared";
 function Layout() {
   const { data: profile, error } = useData<Profile>("/profile");
@@ -682,6 +685,7 @@ function AlbumPage() {
 
 function About() {
   const p = useContext(ProfileContext)!;
+  const growth = useData<Growth>("/growth");
   return (
     <section className={s.page}>
       <PageHeader
@@ -741,6 +745,26 @@ function About() {
           </div>
         </div>
       </div>
+      {growth.data?.items.length ? (
+        <div className={s.growthSection}>
+          <SectionTitle en="GROWING UP" title={`${p.name}的成长曲线`} />
+          <div className={s.growthCharts}>
+            <GrowthChart
+              items={growth.data.items}
+              metric="weight"
+              title="体重"
+              unit="kg"
+            />
+            <GrowthChart
+              items={growth.data.items}
+              metric="height"
+              title="肩高"
+              unit="cm"
+            />
+          </div>
+          <GrowthTable items={growth.data.items} />
+        </div>
+      ) : null}
     </section>
   );
 }

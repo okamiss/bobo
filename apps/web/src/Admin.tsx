@@ -47,6 +47,7 @@ import {
   Feather,
   Users,
   KeyRound,
+  ChartLine,
 } from "lucide-react";
 import {
   api,
@@ -63,6 +64,7 @@ import {
   type Album,
   type AuthUser,
   type Account,
+  type Growth,
 } from "./lib";
 import s from "./App.module.css";
 import {
@@ -74,6 +76,8 @@ import {
   AdminHeading,
   MediaImage,
   BoboIllustration,
+  GrowthChart,
+  GrowthTable,
   useUnsaved,
 } from "./shared";
 
@@ -276,6 +280,9 @@ function AdminContent() {
               </NavLink>
               {user.role === "owner" ? (
                 <>
+                  <NavLink to="/admin/growth">
+                    <ChartLine size={18} /> 成长曲线
+                  </NavLink>
                   <NavLink to="/admin/albums">
                     <ImageIcon size={18} /> 记忆相册
                   </NavLink>
@@ -328,6 +335,7 @@ function AdminContent() {
               <Route path="entries/:id" element={<EntryEditor />} />
               {user.role === "owner" ? (
                 <>
+                  <Route path="growth" element={<GrowthManager />} />
                   <Route path="albums" element={<AdminAlbums />} />
                   <Route path="albums/:id" element={<AlbumEditor />} />
                   <Route
@@ -1638,6 +1646,236 @@ const randomPassword = () =>
     crypto.getRandomValues(new Uint8Array(14)),
     (b) => passwordAlphabet[b % passwordAlphabet.length],
   ).join("");
+
+function GrowthManager() {
+  const { data, error, reload } = useData<Growth>("/admin/growth");
+  const blank = () => ({
+    measuredOn: today(),
+    weight: "",
+    height: "",
+    note: "",
+  });
+  const [form, setForm] = useState(blank),
+    [editing, setEditing] = useState<string | null>(null),
+    [visible, setVisible] = useState(false),
+    [busy, setBusy] = useState(false),
+    [notice, setNotice] = useState<{
+      type: "success" | "error";
+      text: string;
+    } | null>(null);
+  useEffect(() => {
+    if (data) setVisible(data.public);
+  }, [data]);
+  if (error) return <Status error={error} />;
+  if (!data) return <Status loading />;
+  const field = (name: keyof typeof form, value: string) =>
+    setForm((f) => ({ ...f, [name]: value }));
+  const amount = (value: string) =>
+    value.trim() === "" ? null : Number(value);
+  return (
+    <>
+      <AdminHeading
+        title="成长曲线"
+        text="称一称体重、量一量肩高，看看啵啵长大了多少。"
+      />
+      {notice ? (
+        <Alert type={notice.type} showIcon message={notice.text} />
+      ) : null}
+      <form
+        className={`${s.panel} ${s.growthForm}`}
+        onSubmit={async (event) => {
+          event.preventDefault();
+          setBusy(true);
+          setNotice(null);
+          try {
+            await api(
+              editing ? `/admin/growth/${editing}` : "/admin/growth",
+              json(editing ? "PUT" : "POST", {
+                measuredOn: form.measuredOn,
+                weight: amount(form.weight),
+                height: amount(form.height),
+                note: form.note,
+              }),
+            );
+            setNotice({
+              type: "success",
+              text: editing ? "这次测量已更新。" : "已记下这次测量。",
+            });
+            setEditing(null);
+            setForm(blank());
+            reload();
+          } catch (e: any) {
+            setNotice({ type: "error", text: e.message });
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <h3>{editing ? "修改这次测量" : "记录一次测量"}</h3>
+        <div className={s.formRow}>
+          <label>
+            测量日期
+            <Input
+              type="date"
+              required
+              max={today()}
+              value={form.measuredOn}
+              onChange={(e) => field("measuredOn", e.target.value)}
+            />
+          </label>
+          <label>
+            体重（kg）
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              placeholder="例如 4.25"
+              value={form.weight}
+              onChange={(e) => field("weight", e.target.value)}
+            />
+          </label>
+          <label>
+            肩高（cm）
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              min="0"
+              placeholder="例如 28.5"
+              value={form.height}
+              onChange={(e) => field("height", e.target.value)}
+            />
+          </label>
+        </div>
+        <label>
+          备注（可留空，只有家人能看到）
+          <Input
+            maxLength={200}
+            placeholder="例如：打完第二针疫苗后称重"
+            value={form.note}
+            onChange={(e) => field("note", e.target.value)}
+          />
+        </label>
+        <p className={s.hint}>
+          体重和肩高至少填一项；同一天只保留一条记录，需要改就点下方表格里的「修改」。
+        </p>
+        <Space wrap>
+          <Button type="primary" htmlType="submit" loading={busy}>
+            {editing ? "保存修改" : "添加记录"}
+          </Button>
+          {editing ? (
+            <Button
+              onClick={() => {
+                setEditing(null);
+                setForm(blank());
+              }}
+            >
+              取消修改
+            </Button>
+          ) : null}
+        </Space>
+        <hr />
+        <Checkbox
+          className={s.checkLine}
+          checked={visible}
+          onChange={async (e) => {
+            const next = e.target.checked;
+            setVisible(next);
+            try {
+              await api(
+                "/admin/growth-visibility",
+                json("PUT", { public: next }),
+              );
+              setNotice({
+                type: "success",
+                text: next
+                  ? "成长曲线已在「关于啵啵」页面公开，备注不会公开。"
+                  : "成长曲线已改为只有家人可见。",
+              });
+            } catch (err: any) {
+              setVisible(!next);
+              setNotice({ type: "error", text: err.message });
+            }
+          }}
+        >
+          在「关于啵啵」页面公开成长曲线（不含备注）
+        </Checkbox>
+      </form>
+      {data.items.length ? (
+        <div className={`${s.panel} ${s.growthPanel}`}>
+          <div className={s.growthCharts}>
+            <GrowthChart
+              items={data.items}
+              metric="weight"
+              title="体重"
+              unit="kg"
+            />
+            <GrowthChart
+              items={data.items}
+              metric="height"
+              title="肩高"
+              unit="cm"
+            />
+          </div>
+          <h3>全部记录</h3>
+          <GrowthTable
+            items={data.items}
+            open
+            actions={(m) => (
+              <Space size={2}>
+                <Button
+                  size="small"
+                  type="link"
+                  onClick={() => {
+                    setEditing(m.id!);
+                    setForm({
+                      measuredOn: m.measuredOn,
+                      weight: m.weight?.toString() ?? "",
+                      height: m.height?.toString() ?? "",
+                      note: m.note ?? "",
+                    });
+                    setNotice(null);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                >
+                  修改
+                </Button>
+                <Popconfirm
+                  title="删除这次测量？"
+                  okText="删除"
+                  cancelText="取消"
+                  okButtonProps={{ danger: true }}
+                  onConfirm={async () => {
+                    try {
+                      await api(`/admin/growth/${m.id}`, json("DELETE"));
+                      if (editing === m.id) {
+                        setEditing(null);
+                        setForm(blank());
+                      }
+                      reload();
+                    } catch (err: any) {
+                      setNotice({ type: "error", text: err.message });
+                    }
+                  }}
+                >
+                  <Button size="small" type="link" danger>
+                    删除
+                  </Button>
+                </Popconfirm>
+              </Space>
+            )}
+          />
+        </div>
+      ) : (
+        <Empty
+          title="还没有成长记录"
+          text="从今天开始记下体重和肩高，这里就会画出成长曲线。"
+        />
+      )}
+    </>
+  );
+}
 
 const coverTypes = ["image/jpeg", "image/png", "image/webp"];
 

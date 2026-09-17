@@ -48,6 +48,7 @@ import {
   accountNameInput,
   passwordChangeInput,
   passwordResetInput,
+  measurementInput,
 } from "./validation";
 const idSchema = z.string().uuid();
 const shanghaiToday = () =>
@@ -368,6 +369,36 @@ class Content {
       ),
     };
   }
+  // Visitors see measurements only when the owner made the curve public, and
+  // never the notes.
+  async growth(admin = false) {
+    const { growthPublic } = await db.profile.findUniqueOrThrow({
+      where: { id: 1 },
+    });
+    const items =
+      admin || growthPublic
+        ? await db.measurement.findMany({
+            orderBy: { measuredOn: "asc" },
+            ...(admin
+              ? {}
+              : { select: { measuredOn: true, weight: true, height: true } }),
+          })
+        : [];
+    return { public: growthPublic, items };
+  }
+}
+function measurement(body: unknown) {
+  const v = measurementInput.parse(body);
+  if (v.measuredOn > shanghaiToday())
+    throw new BadRequestException("不能记录今天以后的日期");
+  const round = (n: number | null, places: number) =>
+    n === null ? null : Math.round(n * 10 ** places) / 10 ** places;
+  return { ...v, weight: round(v.weight, 2), height: round(v.height, 1) };
+}
+function sameDay(error: any): never {
+  if (error.code === "P2002")
+    throw new ConflictException("这一天已经有记录了，请直接修改那一条");
+  throw error;
 }
 @Controller("api")
 class PublicController {
@@ -390,6 +421,9 @@ class PublicController {
   }
   @Get("on-this-day") onThisDay(@Query() q: unknown) {
     return this.content.onThisDay(q);
+  }
+  @Get("growth") growth() {
+    return this.content.growth();
   }
   @Get("albums") albums() {
     return this.content.albums();
@@ -820,6 +854,49 @@ class AdminController {
     idSchema.parse(id);
     await db.album.delete({ where: { id } });
     return { ok: true };
+  }
+  @Get("growth") async growthRecords(@Req() req: Request) {
+    await owner(req);
+    return this.content.growth(true);
+  }
+  @Post("growth") async addMeasurement(
+    @Req() req: Request,
+    @Body() body: unknown,
+  ) {
+    await owner(req);
+    return db.measurement.create({ data: measurement(body) }).catch(sameDay);
+  }
+  @Put("growth/:id") async saveMeasurement(
+    @Req() req: Request,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    await owner(req);
+    idSchema.parse(id);
+    return db.measurement
+      .update({ where: { id }, data: measurement(body) })
+      .catch(sameDay);
+  }
+  @Delete("growth/:id") async removeMeasurement(
+    @Req() req: Request,
+    @Param("id") id: string,
+  ) {
+    await owner(req);
+    idSchema.parse(id);
+    await db.measurement.delete({ where: { id } });
+    return { ok: true };
+  }
+  @Put("growth-visibility") async setGrowthVisibility(
+    @Req() req: Request,
+    @Body() body: unknown,
+  ) {
+    await owner(req);
+    const v = z.object({ public: z.boolean() }).parse(body);
+    await db.profile.update({
+      where: { id: 1 },
+      data: { growthPublic: v.public },
+    });
+    return v;
   }
 }
 @Module({

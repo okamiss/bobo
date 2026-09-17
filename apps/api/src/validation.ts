@@ -6,6 +6,25 @@ export const date = z
     const d = new Date(`${v}T00:00:00Z`);
     return !isNaN(+d) && d.toISOString().slice(0, 10) === v;
   }, "日期无效");
+export const measurementInput = z
+  .object({
+    measuredOn: date,
+    weight: z
+      .number()
+      .gt(0, "体重需要大于 0")
+      .max(100, "体重不能超过 100 kg")
+      .nullable(),
+    height: z
+      .number()
+      .gt(0, "肩高需要大于 0")
+      .max(150, "肩高不能超过 150 cm")
+      .nullable(),
+    note: z.string().trim().max(200),
+  })
+  .refine(
+    (v) => v.weight !== null || v.height !== null,
+    "体重和肩高至少填写一项",
+  );
 export const entryInput = z.object({
   title: z.string().trim().min(1).max(150),
   occurredOn: date,
