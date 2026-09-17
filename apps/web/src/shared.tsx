@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { api, age, coverOf, type Entry, type Profile, type Media } from "./lib";
 import s from "./App.module.css";
+import illustration from "./assets/illustration.webp";
 export const ProfileContext = createContext<Profile | null>(null);
 
 export function useData<T>(path: string) {
@@ -119,93 +120,12 @@ export function SectionTitle({
 // Shown in place of a page cover or album photos that have not been chosen.
 export function BoboIllustration({ className }: { className?: string }) {
   return (
-    <svg
+    <img
       className={className}
-      viewBox="0 0 400 340"
-      preserveAspectRatio="xMidYMid slice"
-      role="img"
-      aria-label="雪纳瑞啵啵的插画"
-    >
-      <rect width="400" height="340" fill="#e4e9d5" />
-      <circle cx="200" cy="176" r="132" fill="#d6ddc0" />
-      <g fill="#bcc6a2">
-        <circle cx="70" cy="70" r="4" />
-        <circle cx="332" cy="250" r="5" />
-        <circle cx="352" cy="118" r="3" />
-      </g>
-      <path
-        d="M96 118v18M87 127h18"
-        stroke="#b3bf97"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
-      <path
-        d="M312 70c-6-10-22-6-18 8 3 8 18 16 18 16s15-8 18-16c4-14-12-18-18-8z"
-        fill="#d9a184"
-      />
-      <ellipse cx="200" cy="296" rx="116" ry="14" fill="#c4cdaa" />
-      <ellipse cx="146" cy="272" rx="32" ry="26" fill="#7c8277" />
-      <ellipse cx="254" cy="272" rx="32" ry="26" fill="#7c8277" />
-      <path d="M138 296c-8-54 8-100 62-108 54 8 70 54 62 108z" fill="#8f958a" />
-      <path d="M168 296c-6-44 6-80 32-86 26 6 38 42 32 86z" fill="#ecebdf" />
-      <rect x="166" y="232" width="28" height="62" rx="14" fill="#e5e3d6" />
-      <rect x="206" y="232" width="28" height="62" rx="14" fill="#e5e3d6" />
-      <ellipse cx="180" cy="294" rx="19" ry="9" fill="#f4f2e8" />
-      <ellipse cx="220" cy="294" rx="19" ry="9" fill="#f4f2e8" />
-      <path
-        d="M174 290v6M181 290v7M188 290v6M212 290v6M219 290v7M226 290v6"
-        stroke="#d3d1c3"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M148 180c20 16 84 16 104 0"
-        fill="none"
-        stroke="#c98c63"
-        strokeWidth="10"
-        strokeLinecap="round"
-      />
-      <path d="M162 80c-16-10-38-6-42 8 4 14 18 22 34 20z" fill="#6c7266" />
-      <path d="M238 80c16-10 38-6 42 8-4 14-18 22-34 20z" fill="#6c7266" />
-      <rect x="146" y="68" width="108" height="100" rx="40" fill="#9ea397" />
-      <path
-        d="M162 124c-4 36 8 74 26 82 5 2 8-3 12 1 4-4 7 1 12-1 18-8 30-46 26-82-14 9-62 9-76 0z"
-        fill="#efeee4"
-      />
-      <path
-        d="M200 152c-7 10-18 14-28 11M200 152c7 10 18 14 28 11"
-        fill="none"
-        stroke="#d5d3c6"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M189 174q11 9 22 0"
-        fill="none"
-        stroke="#8f958a"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <path d="M195 177q5 11 10 0z" fill="#e49b90" />
-      <path d="M156 112c10-15 30-16 40-5-8 6-25 10-40 9z" fill="#f1f0e6" />
-      <path d="M244 112c-10-15-30-16-40-5 8 6 25 10 40 9z" fill="#f1f0e6" />
-      <circle cx="178" cy="123" r="7" fill="#2c312a" />
-      <circle cx="222" cy="123" r="7" fill="#2c312a" />
-      <circle cx="180.5" cy="120.5" r="2.2" fill="#fff" />
-      <circle cx="224.5" cy="120.5" r="2.2" fill="#fff" />
-      <ellipse cx="200" cy="143" rx="13" ry="9" fill="#2c312a" />
-      <ellipse cx="195" cy="140" rx="3.5" ry="2" fill="#6b7166" />
-      <ellipse cx="162" cy="150" rx="8" ry="5" fill="#e3b29b" opacity=".55" />
-      <ellipse cx="238" cy="150" rx="8" ry="5" fill="#e3b29b" opacity=".55" />
-      <circle cx="200" cy="214" r="8" fill="#e0b155" />
-      <g fill="#b6c09a">
-        <ellipse cx="70" cy="262" rx="9" ry="7" />
-        <circle cx="58" cy="250" r="3.5" />
-        <circle cx="66" cy="245" r="3.5" />
-        <circle cx="75" cy="245" r="3.5" />
-        <circle cx="83" cy="251" r="3.5" />
-      </g>
-    </svg>
+      src={illustration}
+      alt="雪纳瑞啵啵的水彩插画"
+      decoding="async"
+    />
   );
 }
 
