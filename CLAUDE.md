@@ -65,7 +65,7 @@ Schema 在 `apps/api/prisma/schema.prisma`，迁移是已提交的 SQL 目录。
 ## 前端架构（apps/web/src）
 
 - `App.tsx` 懒加载两套界面：`/admin/*` → `Admin.tsx`（Ant Design，`ConfigProvider` 自定义主题），其余路由 → `Public.tsx`。样式集中在 `App.module.css`。
-- `lib.ts`：类型定义、`api()`（失败时抛出带服务端 `message` 的 Error，界面直接展示）、日期与年龄计算。首页纪念日由纯函数 `anniversaries(profile, today)` 在前端计算，满 N 个月的日子与 `age()` 的判定一致（月份没有对应日期时顺延到下月 1 日）；`tests/unit.test.mjs` 会转译 `lib.ts` 直接测试这些函数。`shared.tsx`：`useData(path)` 数据钩子、`ProfileContext`、`StoryView`、`Lightbox`、`useUnsaved`。
+- `lib.ts`：类型定义、`api()`（失败时抛出带服务端 `message` 的 Error，界面直接展示）、日期与年龄计算。首页纪念日由纯函数 `anniversaries(profile, today)` 在前端计算，满 N 个月的日子与 `age()` 的判定一致（月份没有对应日期时顺延到下月 1 日）；`tests/unit.test.mjs` 会转译 `lib.ts` 直接测试这些函数。`shared.tsx`：`useData(path)` 数据钩子、`ProfileContext`、`StoryView`、`Lightbox`、`useUnsaved`。`Lightbox` 中图片由 `ZoomableImage` 处理 Pointer Events 手势（滑动切换、捏合/双击缩放、放大后拖动且不越出画框，容器 `touch-action: none`），视频不接管手势。
 - 正文不渲染 HTML 或 Markdown，`BodyText` 只识别以 `## `、`- `、`> ` 开头的行。
 - `EntryEditor` 把未保存的修改自动写入 `localStorage`（键 `bobo:draft:<entryId>`，`draftOf` 决定保存哪些字段）。打开记录时若草稿与服务器内容不同，提示恢复或丢弃；保存、丢弃、删除记录时清除。给记录新增可编辑字段时，要同步加进 `draftOf`。
 

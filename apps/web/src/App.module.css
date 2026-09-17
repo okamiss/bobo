@@ -1324,7 +1324,7 @@ hr {
   margin: 0;
   flex: 1;
 }
-.lightbox figure > img,
+.lightbox figure img,
 .lightbox figure > video {
   display: block;
   max-width: 100%;
@@ -1333,6 +1333,15 @@ hr {
   height: auto;
   margin: auto;
   object-fit: contain;
+}
+.zoomFrame {
+  overflow: hidden;
+  touch-action: none;
+}
+.zoomFrame > img {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .lightbox figcaption {
   display: flex;
@@ -2284,7 +2293,7 @@ hr {
   .lightbox figure {
     width: 100%;
   }
-  .lightbox figure > img,
+  .lightbox figure img,
   .lightbox figure > video {
     max-height: calc(100dvh - 190px);
   }
