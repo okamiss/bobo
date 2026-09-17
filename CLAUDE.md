@@ -20,6 +20,7 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 集成测试直接请求正在运行的站点（`.env` 中的 `APP_ORIGIN`），从根目录 `.env` 读取管理员凭据，会创建并清理带「测试」标记的临时数据：
 
 - `npm run test:accounts`：账号与成员权限。
+- `npm run test:memories`：「那年今日」接口（用 2088-2090 年的临时故事，不受真实数据和存储模式影响）。
 - `npm run test:integration`：媒体处理、私密隔离、相册等；需要宿主机有 ffmpeg。它假设 `STORAGE_DRIVER=local`（直接调用本地上传接口、校验本地签名 token），OSS 模式下会中途失败。
 - `npm run test:oss`：`STORAGE_DRIVER=oss` 时的真实 Bucket 联调。
 - `tests/persistence.mjs`：先跑 `node tests/integration.mjs --keep`，重建容器后运行，加 `--cleanup` 清理。
@@ -41,6 +42,7 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 - **公开可见性**：统一使用 `validation.ts` 的 `visible`（`status: "published"` 且 `visibility: "public"`）。公开媒体还要求 `state: "ready"` 且 `attached: true`（记录带着该媒体保存后才置为 attached，所以新上传的媒体在保存前不会公开）。相册和页面封面在**读取时**过滤，故事改为私密后会自动从公开相册和封面中消失，写入时不做级联处理。
 - **页面封面**：`Profile.coverMediaId`（首页）和 `aboutCoverMediaId`（关于页）可指向公开故事照片，或 `entryId` 为 null 的「站点图片」（后台上传，仅 owner，只能是图片）。可选范围由 `validation.ts` 的 `coverChoice` 定义。站点图片只在被选为封面时公开（`MediaService.accessible`），不出现在 `/admin/media` 中，也不能加入相册。未设置封面时前台显示 `shared.tsx` 的 `BoboIllustration`，站点不打包真实照片。插画源文件是 `apps/web/src/assets/illustration.png`（2.4MB），页面引用的是用 sharp 缩放到 960×960 的 WebP（质量 86，约 110KB）`illustration.webp`；更换插画时重新生成 WebP，不要直接引用 PNG。
 - **日期**：`occurredOn`、生日等都是 `YYYY-MM-DD` 字符串而不是 DateTime；「今天」按 Asia/Shanghai 计算。排序固定为 `occurredOn desc, id desc`，上一篇/下一篇的查询依赖同一排序。
+- **那年今日**：`GET /api/on-this-day?date=`（`Content.onThisDay`，`date` 可选、默认上海时区今天）返回同月同日的往年公开故事（`yearsAgo`）和一年内同日的故事（`monthsAgo`），往年优先，最多 6 条。
 
 ### 媒体管线（media.ts）
 
@@ -59,7 +61,7 @@ Schema 在 `apps/api/prisma/schema.prisma`，迁移是已提交的 SQL 目录。
 ## 前端架构（apps/web/src）
 
 - `App.tsx` 懒加载两套界面：`/admin/*` → `Admin.tsx`（Ant Design，`ConfigProvider` 自定义主题），其余路由 → `Public.tsx`。样式集中在 `App.module.css`。
-- `lib.ts`：类型定义、`api()`（失败时抛出带服务端 `message` 的 Error，界面直接展示）、日期与年龄计算。`shared.tsx`：`useData(path)` 数据钩子、`ProfileContext`、`StoryView`、`Lightbox`、`useUnsaved`。
+- `lib.ts`：类型定义、`api()`（失败时抛出带服务端 `message` 的 Error，界面直接展示）、日期与年龄计算。首页纪念日由纯函数 `anniversaries(profile, today)` 在前端计算，满 N 个月的日子与 `age()` 的判定一致（月份没有对应日期时顺延到下月 1 日）；`tests/unit.test.mjs` 会转译 `lib.ts` 直接测试这些函数。`shared.tsx`：`useData(path)` 数据钩子、`ProfileContext`、`StoryView`、`Lightbox`、`useUnsaved`。
 - 正文不渲染 HTML 或 Markdown，`BodyText` 只识别以 `## `、`- `、`> ` 开头的行。
 - `EntryEditor` 把未保存的修改自动写入 `localStorage`（键 `bobo:draft:<entryId>`，`draftOf` 决定保存哪些字段）。打开记录时若草稿与服务器内容不同，提示恢复或丢弃；保存、丢弃、删除记录时清除。给记录新增可编辑字段时，要同步加进 `draftOf`。
 

@@ -19,12 +19,16 @@ import {
   Plus,
   Search,
   Feather,
+  Cake,
+  House,
 } from "lucide-react";
 import {
   age,
   daysSince,
+  anniversaries,
   coverOf,
   albumCover,
+  type Memory,
   type Entry,
   type Profile,
   type Listing,
@@ -139,11 +143,13 @@ function Home() {
   const recent = useData<Listing>("/entries?limit=3"),
     special = useData<Listing>("/entries?milestone=true&limit=3"),
     featured = useData<Listing>("/entries?featured=true&limit=1"),
-    albums = useData<Album[]>("/albums");
+    albums = useData<Album[]>("/albums"),
+    memories = useData<{ items: Memory[] }>("/on-this-day");
   const albumCovers = (albums.data || [])
     .map(albumCover)
     .filter((m): m is Media => !!m)
     .slice(0, 3);
+  const upcoming = anniversaries(p);
   return (
     <>
       <section className={s.hero}>
@@ -236,6 +242,47 @@ function Home() {
         <PawPrint size={17} />
         <span>每个平凡的瞬间，都闪闪发光</span>
       </div>
+      {upcoming.length ? (
+        <section className={s.anniversaries}>
+          <div>
+            <span className={s.eyebrow}>DAYS WORTH CELEBRATING</span>
+            <h2>{p.name}的纪念日</h2>
+          </div>
+          <div className={s.anniversaryList}>
+            {upcoming.map((a) => (
+              <article
+                key={`${a.date}-${a.title}`}
+                className={
+                  a.daysLeft === 0
+                    ? `${s.anniversary} ${s.anniversaryToday}`
+                    : s.anniversary
+                }
+              >
+                <span className={s.anniversaryIcon}>
+                  {a.kind === "birthday" ? (
+                    <Cake size={19} />
+                  ) : (
+                    <House size={19} />
+                  )}
+                </span>
+                <div>
+                  <h3>{a.title}</h3>
+                  <small>{a.date.replaceAll("-", ".")}</small>
+                </div>
+                <p>
+                  {a.daysLeft === 0 ? (
+                    <b>就是今天</b>
+                  ) : (
+                    <>
+                      还有<b>{a.daysLeft}</b>天
+                    </>
+                  )}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
       <section className={s.section}>
         <SectionTitle
           en="PAGES OF EVERYDAY"
@@ -278,6 +325,24 @@ function Home() {
           <Status loading />
         )}
       </section>
+      {memories.data?.items.length ? (
+        <section className={s.section}>
+          <SectionTitle en="ON THIS DAY" title="那年今日" />
+          <div className={s.cardGrid}>
+            {memories.data.items.map((e) => (
+              <EntryCard
+                key={e.id}
+                entry={e}
+                note={
+                  e.yearsAgo
+                    ? `${e.yearsAgo} 年前的今天`
+                    : `${e.monthsAgo} 个月前的今天`
+                }
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
       <section className={s.memoriesSection}>
         <SectionTitle
           en="A LITTLE FIRST, A BIG MEMORY"

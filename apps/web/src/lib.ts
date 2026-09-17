@@ -62,6 +62,10 @@ export type Album = {
   coverMediaId: string | null;
   items: Media[];
 };
+export type Memory = Entry & {
+  yearsAgo: number | null;
+  monthsAgo: number | null;
+};
 export type Listing = {
   items: Entry[];
   total: number;
@@ -106,6 +110,69 @@ export function age(date: string, at = today()) {
   let months = (y - by) * 12 + m - bm - (d < bd ? 1 : 0);
   if (months < 1) return `${daysSince(date, at)} 天`;
   return `${Math.floor(months / 12) ? `${Math.floor(months / 12)} 岁 ` : ""}${months % 12 ? `${months % 12} 个月` : ""}`.trim();
+}
+const addDays = (date: string, n: number) =>
+  new Date(Date.parse(`${date}T00:00:00Z`) + n * 86400000)
+    .toISOString()
+    .slice(0, 10);
+// The first day that is n whole months after date, matching age(): when the
+// month is too short (for example Jan 31 + 1), that is the 1st of the next.
+function addMonths(date: string, n: number) {
+  const [y, m, d] = date.split("-").map(Number);
+  const target = new Date(Date.UTC(y, m - 1 + n, 1));
+  const last = new Date(
+    Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  if (d > last) target.setUTCMonth(target.getUTCMonth() + 1);
+  else target.setUTCDate(d);
+  return target.toISOString().slice(0, 10);
+}
+export type Anniversary = {
+  date: string;
+  title: string;
+  kind: "birthday" | "home";
+  daysLeft: number;
+};
+export function anniversaries(
+  p: { birthday: string | null; homeDate: string | null },
+  at = today(),
+  limit = 3,
+): Anniversary[] {
+  const events: Omit<Anniversary, "daysLeft">[] = [];
+  const years = Array.from({ length: 30 }, (_, i) => i + 1);
+  if (p.birthday) {
+    for (let n = 1; n < 12; n++)
+      events.push({
+        date: addMonths(p.birthday, n),
+        title: `满 ${n} 个月`,
+        kind: "birthday",
+      });
+    for (const n of years)
+      events.push({
+        date: addMonths(p.birthday, n * 12),
+        title: `${n} 岁生日`,
+        kind: "birthday",
+      });
+  }
+  if (p.homeDate) {
+    for (const n of [100, 200, 300, 500, 1000, 1500, 2000, 3000, 5000])
+      events.push({
+        date: addDays(p.homeDate, n - 1),
+        title: `到家第 ${n} 天`,
+        kind: "home",
+      });
+    for (const n of years)
+      events.push({
+        date: addMonths(p.homeDate, n * 12),
+        title: `到家 ${n} 周年`,
+        kind: "home",
+      });
+  }
+  return events
+    .filter((e) => e.date >= at)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, limit)
+    .map((e) => ({ ...e, daysLeft: daysSince(at, e.date) }));
 }
 export const coverOf = (e: Entry) =>
   e.media.find((m) => m.id === e.coverMediaId) || e.media[0];

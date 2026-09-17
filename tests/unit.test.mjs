@@ -20,7 +20,7 @@ const source = ts.transpileModule(
     },
   },
 ).outputText;
-const { age, daysSince } = await import(
+const { age, daysSince, anniversaries } = await import(
   `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
 );
 test("dates reject impossible calendar days and accept leap day", () => {
@@ -33,6 +33,48 @@ test("age and home-day calculations are timezone independent", () => {
   assert.equal(age("2024-01-14", "2026-09-14"), "2 岁 8 个月");
   assert.equal(age("2026-09-10", "2026-09-14"), "4 天");
   assert.equal(age("2026-09-20", "2026-09-14"), "");
+});
+test("anniversaries list the next celebrations in date order", () => {
+  const brief = (list) => list.map((a) => [a.title, a.date, a.daysLeft]);
+  const bobo = { birthday: "2026-05-15", homeDate: "2026-06-18" };
+  assert.deepEqual(brief(anniversaries(bobo, "2026-09-17")), [
+    ["到家第 100 天", "2026-09-25", 8],
+    ["满 5 个月", "2026-10-15", 28],
+    ["满 6 个月", "2026-11-15", 59],
+  ]);
+  assert.deepEqual(brief(anniversaries(bobo, "2026-09-25", 1)), [
+    ["到家第 100 天", "2026-09-25", 0],
+  ]);
+  assert.deepEqual(
+    brief(
+      anniversaries(
+        { birthday: null, homeDate: "2026-06-18" },
+        "2027-06-01",
+        2,
+      ),
+    ),
+    [
+      ["到家 1 周年", "2027-06-18", 17],
+      ["到家第 500 天", "2027-10-30", 151],
+    ],
+  );
+  assert.deepEqual(anniversaries({ birthday: null, homeDate: null }), []);
+});
+test("anniversaries at month end agree with the age shown on the site", () => {
+  const first = (birthday, at) =>
+    anniversaries({ birthday, homeDate: null }, at, 1)[0];
+  // Jan 31 has no Feb 31: one month is reached on Mar 1, as age() says.
+  assert.equal(first("2024-01-31", "2024-02-01").date, "2024-03-01");
+  assert.equal(age("2024-01-31", "2024-02-29"), "29 天");
+  assert.equal(age("2024-01-31", "2024-03-01"), "1 个月");
+  // A leap-day birthday turns one on Mar 1 in a common year.
+  const leap = anniversaries(
+    { birthday: "2024-02-29", homeDate: null },
+    "2025-02-01",
+  );
+  assert.deepEqual(leap.find((a) => a.title === "1 岁生日").date, "2025-03-01");
+  assert.equal(age("2024-02-29", "2025-02-28"), "11 个月");
+  assert.equal(age("2024-02-29", "2025-03-01"), "1 岁");
 });
 test("upload limits distinguish images and video and reject unsupported MIME", () => {
   const input = {

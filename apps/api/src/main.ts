@@ -50,6 +50,10 @@ import {
   passwordResetInput,
 } from "./validation";
 const idSchema = z.string().uuid();
+const shanghaiToday = () =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(
+    new Date(),
+  );
 async function session(req: Request) {
   const token = req.cookies?.bobo_session;
   if (!token) return null;
@@ -319,6 +323,51 @@ class Content {
       throw new NotFoundException("相册不存在或未公开");
     return id ? results[0] : results;
   }
+  // Public stories from this calendar day in earlier years, plus the same day
+  // of the month within the past year while there is little history yet.
+  async onThisDay(query: unknown) {
+    const at = z.object({ date: date.optional() }).parse(query).date;
+    const today = at || shanghaiToday();
+    const [year, month, day] = today.split("-").map(Number);
+    const entries = await db.entry.findMany({
+      where: {
+        ...visible,
+        occurredOn: { endsWith: today.slice(7), lt: today },
+      },
+      orderBy: [{ occurredOn: "desc" }, { id: "desc" }],
+      include: {
+        author: { select: { displayName: true } },
+        media: { orderBy: mediaOrder, where: { attached: true } },
+      },
+    });
+    const items = entries
+      .map((entry) => {
+        const [y, m] = entry.occurredOn.split("-").map(Number);
+        const months = (year - y) * 12 + month - m;
+        return months % 12 === 0
+          ? { entry, yearsAgo: months / 12, monthsAgo: null }
+          : months < 12
+            ? { entry, yearsAgo: null, monthsAgo: months }
+            : null;
+      })
+      .filter((x) => x !== null)
+      .sort(
+        (a, b) =>
+          (a.yearsAgo === null ? 1 : 0) - (b.yearsAgo === null ? 1 : 0) ||
+          (a.yearsAgo ?? a.monthsAgo!) - (b.yearsAgo ?? b.monthsAgo!),
+      )
+      .slice(0, 6);
+    return {
+      date: today,
+      items: await Promise.all(
+        items.map(async ({ entry, yearsAgo, monthsAgo }) => ({
+          ...(await this.present(entry)),
+          yearsAgo,
+          monthsAgo,
+        })),
+      ),
+    };
+  }
 }
 @Controller("api")
 class PublicController {
@@ -338,6 +387,9 @@ class PublicController {
   }
   @Get("entries/:id") entry(@Param("id") id: string) {
     return this.content.get(id);
+  }
+  @Get("on-this-day") onThisDay(@Query() q: unknown) {
+    return this.content.onThisDay(q);
   }
   @Get("albums") albums() {
     return this.content.albums();
@@ -562,11 +614,7 @@ class AdminController {
       data: {
         title: "未命名的日子",
         authorId: admin.id,
-        occurredOn:
-          v.occurredOn ||
-          new Intl.DateTimeFormat("en-CA", {
-            timeZone: "Asia/Shanghai",
-          }).format(new Date()),
+        occurredOn: v.occurredOn || shanghaiToday(),
       },
     });
   }

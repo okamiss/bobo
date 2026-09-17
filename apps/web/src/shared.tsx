@@ -195,7 +195,7 @@ function MediaVideo({ media }: { media: Media }) {
   );
 }
 
-export function EntryCard({ entry }: { entry: Entry }) {
+export function EntryCard({ entry, note }: { entry: Entry; note?: string }) {
   const m = coverOf(entry);
   return (
     <Link to={`/stories/${entry.id}`} className={s.entryCard}>
@@ -220,6 +220,7 @@ export function EntryCard({ entry }: { entry: Entry }) {
             的珍藏
           </span>
         )}
+        {note ? <span className={s.cardNote}>{note}</span> : null}
       </div>
       <div className={s.cardMeta}>
         {entry.occurredOn.replaceAll("-", ".")}{" "}
