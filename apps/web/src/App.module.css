@@ -1363,6 +1363,7 @@ hr {
 }
 .albumCard > div {
   height: 230px;
+  overflow: hidden;
   background: #e8ecde;
   display: grid;
   place-items: center;
@@ -1371,6 +1372,9 @@ hr {
 .albumCard > div > img {
   height: 100%;
   width: 100%;
+  min-width: 0;
+  min-height: 0;
+  object-fit: cover;
 }
 .albumCard h3 {
   font:
