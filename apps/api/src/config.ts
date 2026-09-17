@@ -1,9 +1,29 @@
+import OSS from "ali-oss";
 import {
   createHmac,
   randomBytes,
   scryptSync,
   timingSafeEqual,
 } from "node:crypto";
+export type OssClient = OSS & {
+  signatureUrlV4(
+    method: string,
+    expires: number,
+    options: Record<string, unknown>,
+    name: string,
+  ): Promise<string>;
+};
+export function ossClient() {
+  const e = process.env;
+  return new OSS({
+    region: e.OSS_REGION!,
+    bucket: e.OSS_BUCKET!,
+    accessKeyId: e.OSS_ACCESS_KEY_ID!,
+    accessKeySecret: e.OSS_ACCESS_KEY_SECRET!,
+    secure: true,
+    authorizationV4: true,
+  } as any) as OssClient;
+}
 export function config() {
   const e = process.env;
   for (const key of ["DATABASE_URL", "APP_ORIGIN", "SESSION_SECRET"])

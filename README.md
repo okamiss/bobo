@@ -113,7 +113,18 @@ Nginx 挂载只读证书，公开环境只暴露 HTTP/HTTPS 入口；API 与 Pos
 bash scripts/backup.sh
 ```
 
-备份保存在 `backups/`，格式为 PostgreSQL custom dump。替换代码后运行原部署命令，会应用新迁移；不会自动重置数据库或覆盖已有管理员密码。修改 `ADMIN_PASSWORD` 不是已有账号的密码重置方式。家庭管理员自己忘记密码时，在服务器项目目录执行 `docker compose exec api node dist/reset-password.js <用户名>`，终端会显示一个随机新密码，并让该账号所有设备退出登录；登录后请立即在「修改密码」中更换。版本回退需考虑迁移兼容性，不保证旧代码能读取新数据库结构。
+备份保存在 `backups/`，格式为 PostgreSQL custom dump。`backup.sh` 默认只保留最近 14 份本地备份（用 `BACKUP_KEEP=30 bash scripts/backup.sh` 调整）；使用 OSS 存储时还会把同一份备份上传到私有 Bucket 的 `backups/` 目录，上传失败只提示警告，本地备份照常保留。`scripts/update-server.sh` 更新前会自动执行一次。
+
+在服务器上安装每天自动备份（默认按服务器时区每天 03:30，可重复执行，不会重复添加）：
+
+```bash
+cd /opt/bobo && bash scripts/install-backup-cron.sh
+# 自定义时间：BACKUP_SCHEDULE="15 4 * * *" bash scripts/install-backup-cron.sh
+```
+
+运行记录写入 `backups/cron.log`，可用 `crontab -l` 查看任务。OSS 上的备份不会被脚本自动清理，建议在 Bucket 的生命周期规则中为 `backups/` 前缀设置过期时间（例如 90 天）。服务器故障时，可从 OSS 控制台下载 `backups/` 中的备份文件，放到新服务器的 `backups/` 目录后按下面的方式恢复。
+
+替换代码后运行原部署命令，会应用新迁移；不会自动重置数据库或覆盖已有管理员密码。修改 `ADMIN_PASSWORD` 不是已有账号的密码重置方式。家庭管理员自己忘记密码时，在服务器项目目录执行 `docker compose exec api node dist/reset-password.js <用户名>`，终端会显示一个随机新密码，并让该账号所有设备退出登录；登录后请立即在「修改密码」中更换。版本回退需考虑迁移兼容性，不保证旧代码能读取新数据库结构。
 
 恢复演练（备份路径为实际文件）：
 

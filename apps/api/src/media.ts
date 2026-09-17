@@ -5,7 +5,6 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { PrismaClient, Media } from "@prisma/client";
-import OSS from "ali-oss";
 import sharp from "sharp";
 import { mkdir, stat, unlink, open } from "node:fs/promises";
 import { createReadStream, createWriteStream } from "node:fs";
@@ -16,7 +15,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { Request, Response } from "express";
-import { config, sign } from "./config";
+import { config, sign, ossClient, type OssClient } from "./config";
 import { visible } from "./validation";
 const exec = promisify(execFile);
 export const db = new PrismaClient();
@@ -26,26 +25,9 @@ export const mediaOrder = [
 ];
 @Injectable()
 export class MediaService {
-  private oss:
-    | (OSS & {
-        signatureUrlV4(
-          method: string,
-          expires: number,
-          options: Record<string, unknown>,
-          name: string,
-        ): Promise<string>;
-      })
-    | undefined;
+  private oss: OssClient | undefined;
   constructor() {
-    if (config().storage === "oss")
-      this.oss = new OSS({
-        region: process.env.OSS_REGION!,
-        bucket: process.env.OSS_BUCKET!,
-        accessKeyId: process.env.OSS_ACCESS_KEY_ID!,
-        accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET!,
-        secure: true,
-        authorizationV4: true,
-      } as any) as typeof this.oss;
+    if (config().storage === "oss") this.oss = ossClient();
   }
   path(key: string) {
     return join(config().root, key);

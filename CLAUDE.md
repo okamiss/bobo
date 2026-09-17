@@ -72,6 +72,8 @@ Schema 在 `apps/api/prisma/schema.prisma`，迁移是已提交的 SQL 目录。
 - 完整配置与排错记录见 `docs/ubuntu-acr-deployment.md`；`docs/verification.md` 记录实际验收结果。
 - 两个 Dockerfile 的基础镜像都固定了摘要；`.sh` 脚本必须保持 LF（见 `.gitattributes`）。
 - **备份**：`scripts/backup.*` 用 `pg_dump` 导出到 `backups/`，`restore.*` 恢复到独立的 `bobo_restore` 库。数据库备份不含媒体文件。`docker compose down -v` 会删除数据库和媒体卷。
+  - `backup.sh` 先写 `.partial` 再改名；保留最近 `BACKUP_KEEP`（默认 14）份；OSS 模式下通过 `docker compose exec -T api node dist/backup-upload.js <名称> < 文件` 把备份流式上传到 Bucket 的 `backups/`（`src/backup-upload.ts`），上传失败只警告、不中断更新。
+  - 服务器每日备份由 `scripts/install-backup-cron.sh` 写入 crontab（标记注释 `# bobo daily backup`，可重复执行）。
 
 ## 工作约定
 
