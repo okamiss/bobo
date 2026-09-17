@@ -14,6 +14,7 @@ const base = env.APP_ORIGIN;
 let ownerCookie = "";
 let memberCookie = "";
 let accountId = "";
+let albumId = "";
 const entryIds = [];
 
 async function request(
@@ -173,25 +174,42 @@ try {
     status: 403,
   });
 
-  // Site settings and albums are owner-only.
-  await request("/admin/profile", {
+  // Members edit shared site content too; the owner sees who did what.
+  await request("/admin/site-media", { cookie: memberCookie });
+  await request("/admin/profile", { cookie: memberCookie });
+  albumId = (
+    await request("/admin/albums", {
+      method: "POST",
+      cookie: memberCookie,
+      status: 201,
+    })
+  ).data.id;
+  await request(`/admin/albums/${albumId}`, {
     method: "PUT",
     cookie: memberCookie,
-    body: {},
-    status: 403,
+    body: {
+      title: "家人整理的测试相册",
+      description: "",
+      visibility: "private",
+      coverMediaId: null,
+      mediaIds: [],
+    },
   });
-  await request("/admin/albums", {
-    method: "POST",
+  await request(`/admin/albums/${albumId}`, {
+    method: "DELETE",
     cookie: memberCookie,
-    status: 403,
   });
-  await request("/admin/site-media", { cookie: memberCookie, status: 403 });
-  await request("/admin/media/authorize", {
-    method: "POST",
-    cookie: memberCookie,
-    body: { entryId: null, name: "cover.png", mime: "image/png", size: 100 },
-    status: 403,
-  });
+  albumId = "";
+  await request("/admin/audit-logs", { cookie: memberCookie, status: 403 });
+  const logs = (await request("/admin/audit-logs")).data;
+  const mine = logs
+    .filter((log) => log.actorName === displayName)
+    .map((log) => log.summary);
+  assert.deepEqual(mine.slice(0, 3), [
+    "删除了相册「家人整理的测试相册」",
+    "修改了相册「新的相册」，并改名为「家人整理的测试相册」",
+    "新建了相册「新的相册」",
+  ]);
 
   // Members manage their own stories, and attribution stays with them even
   // after the owner edits the story.
@@ -232,9 +250,13 @@ try {
   accountId = "";
 
   console.log(
-    "家庭账号创建、修改与重置密码、成员只能修改自己的记录、管理员专属设置、署名保留、停用与清理通过",
+    "家庭账号创建、修改与重置密码、成员只能修改自己的记录、成员可管理相册且留下操作记录、署名保留、停用与清理通过",
   );
 } finally {
+  if (albumId)
+    await request(`/admin/albums/${albumId}`, { method: "DELETE" }).catch(
+      () => {},
+    );
   for (const id of entryIds)
     await request(`/admin/entries/${id}`, { method: "DELETE" }).catch(() => {});
   if (accountId)

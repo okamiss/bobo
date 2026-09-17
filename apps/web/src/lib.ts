@@ -70,6 +70,12 @@ export type Measurement = {
   note?: string;
 };
 export type Growth = { public: boolean; items: Measurement[] };
+export type AuditEntry = {
+  id: string;
+  actorName: string;
+  summary: string;
+  createdAt: string;
+};
 export type Memory = Entry & {
   yearsAgo: number | null;
   monthsAgo: number | null;

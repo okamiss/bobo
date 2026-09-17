@@ -1705,6 +1705,40 @@ hr {
   display: grid;
   gap: 7px;
 }
+.auditLog {
+  margin-top: 24px;
+}
+.panel.auditLog > h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 500;
+}
+.auditList {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.auditList li {
+  display: grid;
+  grid-template-columns: 150px auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: baseline;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.auditList time {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.auditList strong {
+  font-weight: 500;
+  white-space: nowrap;
+}
+.auditList span {
+  overflow-wrap: anywhere;
+}
 .accountList {
   display: grid;
   gap: 0;
@@ -2441,6 +2475,13 @@ hr {
   }
 }
 @media (max-width: 600px) {
+  .auditList li {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 2px 10px;
+  }
+  .auditList span {
+    grid-column: 1 / -1;
+  }
   .site {
     padding: 0 18px;
   }

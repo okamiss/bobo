@@ -108,27 +108,39 @@ try {
     body: record({ weight: 1.5, height: 21, note: "改过" }),
   });
 
-  // Only the owner manages growth records.
+  // Family members record growth too, and the owner's log names them.
   const suffix = Date.now().toString(36);
+  const memberName = `成长测试家人${suffix.slice(-4)}`;
   memberId = (
     await request("/admin/accounts", {
       method: "POST",
       body: {
         username: `growth_${suffix}`,
-        displayName: "成长测试家人",
+        displayName: memberName,
         password: `Growth-${suffix}-safe`,
       },
       status: 201,
     })
   ).data.id;
   member = await login(`growth_${suffix}`, `Growth-${suffix}-safe`);
-  await request("/admin/growth", { cookie: member, status: 403 });
-  await request("/admin/growth", {
-    method: "POST",
-    cookie: member,
-    body: record({ measuredOn: "2001-03-01", weight: 3 }),
-    status: 403,
-  });
+  await request("/admin/growth", { cookie: member });
+  const byMember = (
+    await request("/admin/growth", {
+      method: "POST",
+      cookie: member,
+      body: record({ measuredOn: "2001-03-01", weight: 3, height: 25 }),
+      status: 201,
+    })
+  ).data;
+  ids.push(byMember.id);
+  await request("/admin/audit-logs", { cookie: member, status: 403 });
+  const log = (await request("/admin/audit-logs")).data.find(
+    (entry) => entry.actorName === memberName,
+  );
+  assert.equal(
+    log?.summary,
+    "添加了 2001-03-01 的成长记录（体重 3 kg，肩高 25 cm）",
+  );
 
   // Visitors see the curve only when it is public, and never the notes.
   const ours = (items) =>
@@ -151,7 +163,7 @@ try {
   ]);
 
   console.log(
-    "成长曲线：仅管理员可管理，数值校验与取整、每天一条、公开开关与隐藏备注，通过",
+    "成长曲线：家人可记录且留下操作记录，数值校验与取整、每天一条、公开开关与隐藏备注，通过",
   );
 } finally {
   for (const id of ids)

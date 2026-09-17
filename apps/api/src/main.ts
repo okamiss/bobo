@@ -90,8 +90,8 @@ async function editableMedia(req: Request, id: string) {
   idSchema.parse(id);
   const media = await db.media.findUnique({ where: { id } });
   if (!media) throw new NotFoundException();
+  // Site images (page covers) belong to no story; any family member may edit.
   if (media.entryId) await editableEntry(req, media.entryId);
-  else await owner(req);
   return media;
 }
 function authUser(admin: {
@@ -400,6 +400,36 @@ function sameDay(error: any): never {
     throw new ConflictException("这一天已经有记录了，请直接修改那一条");
   throw error;
 }
+// Every family member can edit shared site content (profile, covers, albums
+// and growth); each change is recorded for the family admin to review.
+async function audit(
+  admin: { id: string; displayName: string },
+  action: string,
+  summary: string,
+) {
+  await db.auditLog.create({
+    data: { adminId: admin.id, actorName: admin.displayName, action, summary },
+  });
+}
+const profileLabels: Record<string, string> = {
+  siteName: "网站名称",
+  name: "宠物名字",
+  breed: "品种",
+  birthday: "生日",
+  homeDate: "到家日期",
+  intro: "介绍",
+  personality: "性格",
+  hobbies: "爱好",
+  coverMediaId: "首页封面",
+  aboutCoverMediaId: "关于页封面",
+};
+const growthValues = (m: { weight: number | null; height: number | null }) =>
+  [
+    m.weight === null ? "" : `体重 ${m.weight} kg`,
+    m.height === null ? "" : `肩高 ${m.height} cm`,
+  ]
+    .filter(Boolean)
+    .join("，");
 @Controller("api")
 class PublicController {
   constructor(
@@ -725,14 +755,26 @@ class AdminController {
     return this.content.profile(true);
   }
   @Put("profile") async setProfile(@Req() req: Request, @Body() body: unknown) {
-    await owner(req);
+    const admin = await currentAdmin(req);
     const v = profileInput.parse(body);
     for (const id of [v.coverMediaId, v.aboutCoverMediaId])
       if (id && !(await db.media.findFirst({ where: { id, ...coverChoice } })))
         throw new BadRequestException(
           "封面需要选择上传的图片，或公开故事中的照片",
         );
+    const before = await db.profile.findUniqueOrThrow({ where: { id: 1 } });
     await db.profile.update({ where: { id: 1 }, data: v });
+    const changed = Object.keys(profileLabels).filter(
+      (key) =>
+        (before as Record<string, unknown>)[key] !==
+        (v as Record<string, unknown>)[key],
+    );
+    if (changed.length)
+      await audit(
+        admin,
+        "profile.update",
+        `修改了网站资料：${changed.map((key) => profileLabels[key]).join("、")}`,
+      );
     return this.content.profile(true);
   }
   @Post("media/authorize") async authorize(
@@ -741,11 +783,8 @@ class AdminController {
   ) {
     const v = uploadInput.parse(body);
     if (v.entryId) await editableEntry(req, v.entryId);
-    else {
-      await owner(req);
-      if (v.mime.startsWith("video/"))
-        throw new BadRequestException("页面封面只支持图片");
-    }
+    else if (v.mime.startsWith("video/"))
+      throw new BadRequestException("页面封面只支持图片");
     return this.media.authorize(v);
   }
   @Put("media/:id/upload") async upload(
@@ -759,8 +798,15 @@ class AdminController {
     @Req() req: Request,
     @Param("id") id: string,
   ) {
-    await editableMedia(req, id);
-    return this.media.complete(id);
+    const m = await editableMedia(req, id);
+    const result = await this.media.complete(id);
+    if (!m.entryId && m.state !== "ready" && result.state === "ready")
+      await audit(
+        await currentAdmin(req),
+        "site-media.upload",
+        `上传了页面图片「${m.name}」`,
+      );
+    return result;
   }
   @Get("media/:id/status") async mediaStatus(
     @Req() req: Request,
@@ -781,6 +827,12 @@ class AdminController {
       await this.media.remove(`${m.key}.${s}`).catch(() => {});
     if (config().storage === "oss")
       await this.media.remove(`staging/${m.key}`).catch(() => {});
+    if (!m.entryId && m.state === "ready")
+      await audit(
+        await currentAdmin(req),
+        "site-media.delete",
+        `删除了页面图片「${m.name}」`,
+      );
     return { ok: true };
   }
   @Get("media") async allMedia(@Query("publicOnly") publicOnly?: string) {
@@ -795,8 +847,7 @@ class AdminController {
     });
     return Promise.all(list.map((m) => this.media.present(m)));
   }
-  @Get("site-media") async siteMedia(@Req() req: Request) {
-    await owner(req);
+  @Get("site-media") async siteMedia() {
     const list = await db.media.findMany({
       where: { entryId: null, state: "ready" },
       orderBy: { createdAt: "desc" },
@@ -810,15 +861,17 @@ class AdminController {
     return this.content.albums(true, id);
   }
   @Post("albums") async createAlbum(@Req() req: Request) {
-    await owner(req);
-    return db.album.create({ data: { title: "新的相册" } });
+    const admin = await currentAdmin(req);
+    const album = await db.album.create({ data: { title: "新的相册" } });
+    await audit(admin, "album.create", `新建了相册「${album.title}」`);
+    return album;
   }
   @Put("albums/:id") async saveAlbum(
     @Req() req: Request,
     @Param("id") id: string,
     @Body() body: unknown,
   ) {
-    await owner(req);
+    const admin = await currentAdmin(req);
     idSchema.parse(id);
     const { mediaIds, ...v } = albumInput.parse(body);
     if (
@@ -833,6 +886,7 @@ class AdminController {
       throw new BadRequestException("包含不可用媒体");
     if (v.coverMediaId && !mediaIds.includes(v.coverMediaId))
       throw new BadRequestException("封面必须在相册内");
+    const before = await db.album.findUniqueOrThrow({ where: { id } });
     await db.$transaction(async (tx) => {
       await tx.album.update({ where: { id }, data: v });
       await tx.albumItem.deleteMany({ where: { albumId: id } });
@@ -844,59 +898,100 @@ class AdminController {
         })),
       });
     });
+    await audit(
+      admin,
+      "album.update",
+      before.title === v.title
+        ? `修改了相册「${v.title}」`
+        : `修改了相册「${before.title}」，并改名为「${v.title}」`,
+    );
     return this.content.albums(true, id);
   }
   @Delete("albums/:id") async removeAlbum(
     @Req() req: Request,
     @Param("id") id: string,
   ) {
-    await owner(req);
+    const admin = await currentAdmin(req);
     idSchema.parse(id);
-    await db.album.delete({ where: { id } });
+    const album = await db.album.delete({ where: { id } });
+    await audit(admin, "album.delete", `删除了相册「${album.title}」`);
     return { ok: true };
   }
-  @Get("growth") async growthRecords(@Req() req: Request) {
-    await owner(req);
+  @Get("growth") growthRecords() {
     return this.content.growth(true);
   }
   @Post("growth") async addMeasurement(
     @Req() req: Request,
     @Body() body: unknown,
   ) {
-    await owner(req);
-    return db.measurement.create({ data: measurement(body) }).catch(sameDay);
+    const admin = await currentAdmin(req);
+    const saved = await db.measurement
+      .create({ data: measurement(body) })
+      .catch(sameDay);
+    await audit(
+      admin,
+      "growth.create",
+      `添加了 ${saved.measuredOn} 的成长记录（${growthValues(saved)}）`,
+    );
+    return saved;
   }
   @Put("growth/:id") async saveMeasurement(
     @Req() req: Request,
     @Param("id") id: string,
     @Body() body: unknown,
   ) {
-    await owner(req);
+    const admin = await currentAdmin(req);
     idSchema.parse(id);
-    return db.measurement
+    const saved = await db.measurement
       .update({ where: { id }, data: measurement(body) })
       .catch(sameDay);
+    await audit(
+      admin,
+      "growth.update",
+      `修改了 ${saved.measuredOn} 的成长记录（${growthValues(saved)}）`,
+    );
+    return saved;
   }
   @Delete("growth/:id") async removeMeasurement(
     @Req() req: Request,
     @Param("id") id: string,
   ) {
-    await owner(req);
+    const admin = await currentAdmin(req);
     idSchema.parse(id);
-    await db.measurement.delete({ where: { id } });
+    const removed = await db.measurement.delete({ where: { id } });
+    await audit(
+      admin,
+      "growth.delete",
+      `删除了 ${removed.measuredOn} 的成长记录（${growthValues(removed)}）`,
+    );
     return { ok: true };
   }
   @Put("growth-visibility") async setGrowthVisibility(
     @Req() req: Request,
     @Body() body: unknown,
   ) {
-    await owner(req);
+    const admin = await currentAdmin(req);
     const v = z.object({ public: z.boolean() }).parse(body);
+    const before = await db.profile.findUniqueOrThrow({ where: { id: 1 } });
     await db.profile.update({
       where: { id: 1 },
       data: { growthPublic: v.public },
     });
+    if (before.growthPublic !== v.public)
+      await audit(
+        admin,
+        "growth.visibility",
+        v.public ? "在「关于啵啵」页面公开了成长曲线" : "取消了成长曲线的公开",
+      );
     return v;
+  }
+  @Get("audit-logs") async auditLogs(@Req() req: Request) {
+    await owner(req);
+    return db.auditLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      select: { id: true, actorName: true, summary: true, createdAt: true },
+    });
   }
 }
 @Module({

@@ -8,14 +8,29 @@ datasource db {
 }
 
 model Admin {
-  id           String    @id @default(uuid())
-  username     String    @unique
+  id           String     @id @default(uuid())
+  username     String     @unique
   displayName  String
   passwordHash String
-  role         String    @default("member")
-  active       Boolean   @default(true)
+  role         String     @default("member")
+  active       Boolean    @default(true)
   sessions     Session[]
   entries      Entry[]
+  auditLogs    AuditLog[]
+}
+
+// Who changed shared site content (profile, covers, albums, growth) and how.
+// actorName keeps the display name at the time, even if the account changes.
+model AuditLog {
+  id        String   @id @default(uuid())
+  adminId   String?
+  admin     Admin?   @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  actorName String
+  action    String
+  summary   String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 model Session {

@@ -65,6 +65,7 @@ import {
   type AuthUser,
   type Account,
   type Growth,
+  type AuditEntry,
 } from "./lib";
 import s from "./App.module.css";
 import {
@@ -278,21 +279,19 @@ function AdminContent() {
               <NavLink to="/admin" end>
                 <BookOpen size={18} /> 成长记录
               </NavLink>
+              <NavLink to="/admin/growth">
+                <ChartLine size={18} /> 成长曲线
+              </NavLink>
+              <NavLink to="/admin/albums">
+                <ImageIcon size={18} /> 记忆相册
+              </NavLink>
+              <NavLink to="/admin/settings">
+                <Settings size={18} /> 啵啵与网站
+              </NavLink>
               {user.role === "owner" ? (
-                <>
-                  <NavLink to="/admin/growth">
-                    <ChartLine size={18} /> 成长曲线
-                  </NavLink>
-                  <NavLink to="/admin/albums">
-                    <ImageIcon size={18} /> 记忆相册
-                  </NavLink>
-                  <NavLink to="/admin/settings">
-                    <Settings size={18} /> 啵啵与网站
-                  </NavLink>
-                  <NavLink to="/admin/accounts">
-                    <Users size={18} /> 家庭账号
-                  </NavLink>
-                </>
+                <NavLink to="/admin/accounts">
+                  <Users size={18} /> 家庭账号
+                </NavLink>
               ) : null}
             </nav>
             <div className={s.sidebarBottom}>
@@ -333,20 +332,18 @@ function AdminContent() {
             <Routes>
               <Route index element={<AdminEntries />} />
               <Route path="entries/:id" element={<EntryEditor />} />
+              <Route path="growth" element={<GrowthManager />} />
+              <Route path="albums" element={<AdminAlbums />} />
+              <Route path="albums/:id" element={<AlbumEditor />} />
+              <Route
+                path="settings"
+                element={<ProfileEditor refresh={p.reload} />}
+              />
               {user.role === "owner" ? (
-                <>
-                  <Route path="growth" element={<GrowthManager />} />
-                  <Route path="albums" element={<AdminAlbums />} />
-                  <Route path="albums/:id" element={<AlbumEditor />} />
-                  <Route
-                    path="settings"
-                    element={<ProfileEditor refresh={p.reload} />}
-                  />
-                  <Route
-                    path="accounts"
-                    element={<AccountManager onChanged={check} />}
-                  />
-                </>
+                <Route
+                  path="accounts"
+                  element={<AccountManager onChanged={check} />}
+                />
               ) : null}
               <Route path="*" element={<Empty title="没有这一页" />} />
             </Routes>
@@ -1350,6 +1347,7 @@ function AccountManager({
   onChanged: () => void | Promise<void>;
 }) {
   const { data, error, reload } = useData<Account[]>("/admin/accounts");
+  const logs = useData<AuditEntry[]>("/admin/audit-logs");
   const [notice, setNotice] = useState<{
     type: "success" | "error";
     text: string;
@@ -1550,6 +1548,39 @@ function AccountManager({
           )}
         </section>
       </div>
+      <section className={`${s.panel} ${s.auditLog}`}>
+        <h3>操作记录</h3>
+        <p className={s.hint}>
+          家人修改网站资料、页面封面、相册和成长曲线时会记在这里，显示最近 200
+          条。
+        </p>
+        {logs.error ? (
+          <Status error={logs.error} />
+        ) : !logs.data ? (
+          <Status loading />
+        ) : !logs.data.length ? (
+          <p className={s.hint}>还没有操作记录。</p>
+        ) : (
+          <ol className={s.auditList}>
+            {logs.data.map((log) => (
+              <li key={log.id}>
+                <time dateTime={log.createdAt}>
+                  {new Date(log.createdAt).toLocaleString("zh-CN", {
+                    timeZone: "Asia/Shanghai",
+                    year: "numeric",
+                    month: "numeric",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </time>
+                <strong>{log.actorName}</strong>
+                <span>{log.summary}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
       <Modal
         title={`修改${editing ? `「${editing.displayName}」` : ""}的显示名字`}
         open={editing !== null}

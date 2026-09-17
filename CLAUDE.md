@@ -38,14 +38,15 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 - **密码**：`PUT /api/auth/password` 修改自己的密码（校验当前密码，保留当前会话、删除其他会话，有独立的失败次数限流）；`PUT /api/admin/accounts/:id/password` 由 owner 重置成员密码（删除该成员全部会话，不能用于 owner）。owner 忘记密码时，在服务器执行 `docker compose exec api node dist/reset-password.js <用户名>`（`src/reset-password.ts`）生成随机密码。
 - **角色**：`owner`（家庭管理员）和 `member`。
   - 权限辅助函数：`owner(req)`、`editableEntry(req, id)`、`editableMedia(req, id)`。
-  - 成员只能修改 `authorId` 等于自己的记录及其媒体；站点资料、相册、账号只有 owner 能改。
+  - 成员只能修改 `authorId` 等于自己的记录及其媒体；家庭账号管理和操作记录查看只有 owner 能用。
+  - 站点资料与页面封面、站点图片、相册、成长曲线所有成员都能改，每次成功修改后调用 `main.ts` 的 `audit()` 写入 `AuditLog`（`actorName` 保存当时的显示名，`summary` 为中文描述）。新增这类共享内容的写接口时，也要记录操作；`GET /api/admin/audit-logs` 仅 owner，前端显示在「家庭账号」页。
   - `authorId` 取创建者，之后不再变更（owner 代为发布也不改署名）。
   - 前端 `Admin.tsx` 的 `UserContext` + `canEdit` 按同样规则隐藏入口，两边要同步修改。
 - **公开可见性**：统一使用 `validation.ts` 的 `visible`（`status: "published"` 且 `visibility: "public"`）。公开媒体还要求 `state: "ready"` 且 `attached: true`（记录带着该媒体保存后才置为 attached，所以新上传的媒体在保存前不会公开）。相册和页面封面在**读取时**过滤，故事改为私密后会自动从公开相册和封面中消失，写入时不做级联处理。
-- **页面封面**：`Profile.coverMediaId`（首页）和 `aboutCoverMediaId`（关于页）可指向公开故事照片，或 `entryId` 为 null 的「站点图片」（后台上传，仅 owner，只能是图片）。可选范围由 `validation.ts` 的 `coverChoice` 定义。站点图片只在被选为封面时公开（`MediaService.accessible`），不出现在 `/admin/media` 中，也不能加入相册。未设置封面时前台显示 `shared.tsx` 的 `BoboIllustration`，站点不打包真实照片。插画源文件是 `apps/web/src/assets/illustration.png`（2.4MB），页面引用的是用 sharp 缩放到 960×960 的 WebP（质量 86，约 110KB）`illustration.webp`；更换插画时重新生成 WebP，不要直接引用 PNG。
+- **页面封面**：`Profile.coverMediaId`（首页）和 `aboutCoverMediaId`（关于页）可指向公开故事照片，或 `entryId` 为 null 的「站点图片」（后台上传，所有成员可用，只能是图片）。可选范围由 `validation.ts` 的 `coverChoice` 定义。站点图片只在被选为封面时公开（`MediaService.accessible`），不出现在 `/admin/media` 中，也不能加入相册。未设置封面时前台显示 `shared.tsx` 的 `BoboIllustration`，站点不打包真实照片。插画源文件是 `apps/web/src/assets/illustration.png`（2.4MB），页面引用的是用 sharp 缩放到 960×960 的 WebP（质量 86，约 110KB）`illustration.webp`；更换插画时重新生成 WebP，不要直接引用 PNG。
 - **日期**：`occurredOn`、生日等都是 `YYYY-MM-DD` 字符串而不是 DateTime；「今天」按 Asia/Shanghai 计算。排序固定为 `occurredOn desc, id desc`，上一篇/下一篇的查询依赖同一排序。
 - **那年今日**：`GET /api/on-this-day?date=`（`Content.onThisDay`，`date` 可选、默认上海时区今天）返回同月同日的往年公开故事（`yearsAgo`）和一年内同日的故事（`monthsAgo`），往年优先，最多 6 条。
-- **成长曲线**：`Measurement` 表（`measuredOn` 唯一，`weight` kg / `height` cm 可空、至少一项，`note` 只给家人看）。管理接口 `/api/admin/growth`（增删改）和 `/api/admin/growth-visibility` 仅 owner；`GET /api/growth` 只在 `Profile.growthPublic` 为 true 时返回数据，且不含 `id`/`note`。前端 `shared.tsx` 的 `GrowthChart`（体重、肩高分成两张图，不用双 y 轴；线色 `#5f8c46` 经 dataviz 校验；宽度随容器，悬停与方向键查看）和 `GrowthTable`（数据表）在关于页与后台共用。
+- **成长曲线**：`Measurement` 表（`measuredOn` 唯一，`weight` kg / `height` cm 可空、至少一项，`note` 只给家人看）。管理接口 `/api/admin/growth`（增删改）和 `/api/admin/growth-visibility` 所有成员可用并记录操作；`GET /api/growth` 只在 `Profile.growthPublic` 为 true 时返回数据，且不含 `id`/`note`。前端 `shared.tsx` 的 `GrowthChart`（体重、肩高分成两张图，不用双 y 轴；线色 `#5f8c46` 经 dataviz 校验；宽度随容器，悬停与方向键查看）和 `GrowthTable`（数据表）在关于页与后台共用。
 
 ### 媒体管线（media.ts）
 
