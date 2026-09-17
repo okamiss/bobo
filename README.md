@@ -46,9 +46,9 @@ docker compose up -d --build --wait --wait-timeout 180
 
 ## 媒体与存储
 
-图片：静态 JPG / PNG / WebP，最多 20MB，最多 6000 万解码像素。视频：MP4 容器、H.264 视频、可选 AAC 音轨，最多 200MB / 180 秒。不自动转码 HEIC、MOV、HEVC。
+图片：静态 JPG / PNG / WebP，最多 20MB，最多 6000 万解码像素。视频：MP4 或 MOV，最多 500MB / 180 秒。不支持 HEIC 图片（iPhone 在网页中选择照片时一般会自动转成 JPG）。
 
-后端实际检查文件内容；图片生成 640px 缩略图和最长边 2000px 展示图，自动校正 EXIF 方向并移除展示图元数据。视频使用容器内 ffprobe 核验、ffmpeg 生成首帧封面，不自动播放，支持 HTTP Range 播放。
+后端实际检查文件内容；图片生成 640px 缩略图和最长边 2000px 展示图，自动校正 EXIF 方向并移除展示图元数据。视频使用容器内 ffprobe 核验、ffmpeg 生成首帧封面，不自动播放，支持 HTTP Range 播放。浏览器可直接播放的 MP4（8 位 H.264 视频、AAC 音轨）原样保存；其他视频，例如 iPhone 默认拍摄的 HEVC / HDR MOV，会转成 H.264 MP4：长边最多 1920px、帧率最多 30fps，竖拍方向写入画面，HDR 色调映射为普通亮度。转换较慢时在后台继续，后台页面会显示「正在转换视频格式」，可以先继续写；多个视频依次转换，避免占满服务器 CPU。
 
 `STORAGE_DRIVER=local` 将文件存入 Docker 命名卷；`STORAGE_DRIVER=oss` 使用私有 OSS Bucket。切换驱动不会自动迁移既有文件，已有本地记录时需先迁移同名对象再切换。
 
@@ -192,12 +192,13 @@ npm run typecheck
 npm test
 npm run test:accounts
 npm run test:memories
+npm run test:video
 npm run test:integration
 ```
 
 集成测试要求 Docker 网站运行、项目根目录存在对应 `.env`，宿主机测试工具需 Node.js 和 ffmpeg；部署本身不要求宿主机安装这些工具。测试创建明确标注的临时记录、图片和视频，在完成后清理。不要同时在测试中编辑测试记录。
 
-`tests/unit.test.mjs` 覆盖有效日期、年龄与天数、纪念日计算（含月末与闰日）、上传边界、密码验证、OSS 配置失败及目录前缀；`tests/memories.integration.mjs` 覆盖「那年今日」的日期匹配、排序与私密草稿排除，不依赖存储模式；`tests/accounts.integration.mjs` 覆盖家庭账号创建、修改与重置密码、成员只能修改自己的记录、管理员专属设置、署名保留、停用和清理；`tests/integration.mjs` 覆盖登录、来源限制、真实图片视频处理、私密隔离、长正文保存、上一篇/下一篇顺序、页面封面上传与公开范围、相册复用与删除行为；`tests/oss.integration.mjs` 面向真实私有 Bucket 验证预签名上传、CORS、服务端处理、签名读取与自动清理。
+`tests/unit.test.mjs` 覆盖有效日期、年龄与天数、纪念日计算（含月末与闰日）、上传边界、密码验证、OSS 配置失败及目录前缀；`tests/memories.integration.mjs` 覆盖「那年今日」的日期匹配、排序与私密草稿排除，不依赖存储模式；`tests/video.integration.mjs` 用宿主机 ffmpeg（需 libx265）生成 iPhone 式 HEVC HDR MOV，验证转码、旋转、帧率、兼容 MP4 原样保留及各类拒绝提示，不依赖存储模式；`tests/accounts.integration.mjs` 覆盖家庭账号创建、修改与重置密码、成员只能修改自己的记录、管理员专属设置、署名保留、停用和清理；`tests/integration.mjs` 覆盖登录、来源限制、真实图片视频处理、私密隔离、长正文保存、上一篇/下一篇顺序、页面封面上传与公开范围、相册复用与删除行为；`tests/oss.integration.mjs` 面向真实私有 Bucket 验证预签名上传、CORS、服务端处理、签名读取与自动清理。
 
 项目结构：`apps/web` 为前台与后台界面，`apps/api` 为 NestJS 与 Prisma 迁移，`deploy` 为 Nginx 配置，`scripts` 为部署备份入口，`tests` 为验收测试。
 

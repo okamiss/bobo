@@ -178,6 +178,42 @@ export const coverOf = (e: Entry) =>
   e.media.find((m) => m.id === e.coverMediaId) || e.media[0];
 export const albumCover = (a: Album): Media | undefined =>
   a.items.find((m) => m.id === a.coverMediaId) || a.items[0];
+const uploadTypes: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  mp4: "video/mp4",
+  mov: "video/quicktime",
+};
+// Some browsers leave File.type empty for .mov files; fall back to the name.
+export function uploadType(file: File) {
+  const mime =
+    file.type || uploadTypes[file.name.split(".").pop()!.toLowerCase()] || "";
+  if (!Object.values(uploadTypes).includes(mime))
+    throw new Error("只支持 JPG、PNG、WebP 图片和 MP4、MOV 视频");
+  const video = mime.startsWith("video/");
+  if (file.size > (video ? 500 : 20) * 1024 * 1024)
+    throw new Error(video ? "视频最大 500MB" : "照片最大 20MB");
+  return mime;
+}
+// Long video conversions finish in the background; poll until done.
+export async function waitForMedia(id: string) {
+  for (let misses = 0; ; ) {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    try {
+      const status = await api<{ state: string; error: string | null }>(
+        `/admin/media/${id}/status`,
+      );
+      misses = 0;
+      if (status.state === "ready") return;
+      if (status.state === "pending")
+        throw new Error(status.error || "视频处理被中断，请重试");
+    } catch (e: any) {
+      if (e.message.includes("视频") || ++misses >= 5) throw e;
+    }
+  }
+}
 export function uploadFile(
   url: string,
   file: File,

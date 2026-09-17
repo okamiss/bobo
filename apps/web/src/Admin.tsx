@@ -54,6 +54,8 @@ import {
   today,
   coverOf,
   uploadFile,
+  uploadType,
+  waitForMedia,
   type Entry,
   type Profile,
   type Media,
@@ -497,6 +499,7 @@ type UploadTask = {
   error?: string;
   id?: string;
   done?: boolean;
+  converting?: boolean;
 };
 
 // Unsaved editor changes are kept in this browser, so a refresh, a closed tab
@@ -669,14 +672,15 @@ function EntryEditor() {
         t.map((x) => (x === task || x.file === task.file ? { ...x, ...v } : x)),
       );
     try {
-      patch({ error: undefined, progress: 0, done: false });
+      patch({ error: undefined, progress: 0, done: false, converting: false });
+      const mime = uploadType(task.file);
       if (task.id) await api(`/admin/media/${task.id}`, json("DELETE"));
       const permit = await api(
         "/admin/media/authorize",
         json("POST", {
           entryId: id,
           name: task.file.name,
-          mime: task.file.type,
+          mime,
           size: task.file.size,
         }),
       );
@@ -685,8 +689,15 @@ function EntryEditor() {
       await uploadFile(permit.url, task.file, permit.headers, (n) =>
         patch({ progress: n }),
       );
-      await api(`/admin/media/${permit.id}/complete`, json("POST"));
-      patch({ done: true });
+      const processed = await api<{ state: string }>(
+        `/admin/media/${permit.id}/complete`,
+        json("POST"),
+      );
+      if (processed.state !== "ready") {
+        patch({ converting: true });
+        await waitForMedia(permit.id);
+      }
+      patch({ done: true, converting: false });
       await refreshMedia();
     } catch (e: any) {
       patch({ error: e.message });
@@ -824,7 +835,7 @@ function EntryEditor() {
                 ref={fileInput}
                 type="file"
                 multiple
-                accept="image/jpeg,image/png,image/webp,video/mp4"
+                accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,.mov"
                 disabled={uploading}
                 onChange={async (e) => {
                   const selected = Array.from(e.target.files || []).map(
@@ -838,7 +849,8 @@ function EntryEditor() {
             </div>
           </div>
           <p className={s.hint}>
-            照片 ≤20MB；MP4 / H.264 视频 ≤200MB、3 分钟。上传完成后再保存发布。
+            照片 ≤20MB；视频 ≤500MB、3 分钟以内，iPhone
+            拍的视频会自动转换格式。上传完成后再保存发布。
           </p>
           {tasks.map((t, i) => (
             <div className={s.uploadTask} key={i}>
@@ -857,7 +869,13 @@ function EntryEditor() {
               ) : t.error ? (
                 <Tag color="red">{t.error}</Tag>
               ) : (
-                <span>{t.progress === 100 ? "正在校验和处理…" : null}</span>
+                <span>
+                  {t.converting
+                    ? "正在转换视频格式，可能需要几分钟，可以先继续写"
+                    : t.progress === 100
+                      ? "正在校验和处理…"
+                      : null}
+                </span>
               )}
               {t.error ? (
                 <Button type="link" size="small" onClick={() => run(t)}>

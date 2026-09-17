@@ -709,7 +709,7 @@ class AdminController {
     if (v.entryId) await editableEntry(req, v.entryId);
     else {
       await owner(req);
-      if (v.mime === "video/mp4")
+      if (v.mime.startsWith("video/"))
         throw new BadRequestException("页面封面只支持图片");
     }
     return this.media.authorize(v);
@@ -727,6 +727,13 @@ class AdminController {
   ) {
     await editableMedia(req, id);
     return this.media.complete(id);
+  }
+  @Get("media/:id/status") async mediaStatus(
+    @Req() req: Request,
+    @Param("id") id: string,
+  ) {
+    await editableMedia(req, id);
+    return this.media.status(id);
   }
   @Delete("media/:id") async removeMedia(
     @Req() req: Request,

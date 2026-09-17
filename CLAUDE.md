@@ -21,6 +21,7 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 
 - `npm run test:accounts`：账号与成员权限。
 - `npm run test:memories`：「那年今日」接口（用 2088-2090 年的临时故事，不受真实数据和存储模式影响）。
+- `npm run test:video`：视频上传与转码，需要宿主机 ffmpeg 带 libx265；不依赖存储模式。
 - `npm run test:integration`：媒体处理、私密隔离、相册等；需要宿主机有 ffmpeg。它假设 `STORAGE_DRIVER=local`（直接调用本地上传接口、校验本地签名 token），OSS 模式下会中途失败。
 - `npm run test:oss`：`STORAGE_DRIVER=oss` 时的真实 Bucket 联调。
 - `tests/persistence.mjs`：先跑 `node tests/integration.mjs --keep`，重建容器后运行，加 `--cleanup` 清理。
@@ -47,8 +48,9 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 ### 媒体管线（media.ts）
 
 1. **授权**：`authorize` 创建 `Media` 行，状态为 `pending`，并返回上传地址。`local` 驱动是 `PUT /api/admin/media/:id/upload`（写入 `<id>.staging`）；`oss` 驱动是预签名 PUT，目标为 `<前缀>staging/<id>`。
-2. **处理**：`complete` 先用 `updateMany` 把状态从 `pending` 改为 `processing` 作为并发锁，再回读 staging 文件并按真实内容校验：图片用 sharp（仅静态 JPEG/PNG/WebP），视频用 ffprobe（MP4/H.264，音轨可选 AAC，≤180 秒）。
-3. **写入**：生成 `<key>.original`、`<key>.thumb`（640px WebP）、`<key>.display`（仅图片，2000px WebP），状态改为 `ready`；失败则回到 `pending`。
+2. **处理**：`complete` 先用 `updateMany` 把状态从 `pending` 改为 `processing` 作为并发锁，然后在 `process()` 中回读 staging 文件并按真实内容校验：图片用 sharp（仅静态 JPEG/PNG/WebP）；视频（MP4 或 iPhone 的 MOV，≤180 秒）用 ffprobe 检查，8 位 H.264 + AAC 的 MP4 原样保留，其他格式在 `transcode()` 中转为 H.264 MP4（长边 ≤1920、≤30fps，HLG/PQ 用 zscale+tonemap 转 SDR，失败再退回不做色调映射；输出色彩标签要用 `setparams` 写到帧上，编码器参数不生效）。转码通过 `transcoding` 队列串行执行。
+3. **写入**：生成 `<key>.original`（视频一律为 MP4，`mime`/`size` 更新为最终文件）、`<key>.thumb`（640px WebP）、`<key>.display`（仅图片，2000px WebP），状态改为 `ready`；失败则回到 `pending`，错误信息记在内存的 `failures` 中。
+   - `complete` 最多等待 `MEDIA_WAIT_SECONDS`（默认 20，未在 Compose 中暴露，测试时可用 override 设为 0）；超时则返回 `state: "processing"`，处理继续在后台进行，前端 `waitForMedia()` 轮询 `GET /api/admin/media/:id/status`。
 4. **单实例假设**：API 启动时会把残留的 `uploading`/`processing` 重置为 `pending`。
 5. **读取**：`present()` 为 `url`/`thumb` 签发 5 分钟有效的地址（local 用 HMAC token，由 `/api/media/:id/file/:variant` 提供；oss 用 V4 签名 GET）。前端必须通过 `shared.tsx` 的 `MediaImage` / `MediaVideo` 渲染媒体，它们在地址过期时会调用一次 `/api/media/:id/access` 换新地址。
 6. **切换存储**：更换 `STORAGE_DRIVER` 不会迁移已有文件。

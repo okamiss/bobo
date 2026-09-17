@@ -12,6 +12,7 @@
     "test:accounts": "node tests/accounts.integration.mjs",
     "test:integration": "node tests/integration.mjs",
     "test:memories": "node tests/memories.integration.mjs",
+    "test:video": "node tests/video.integration.mjs",
     "test:oss": "node tests/oss.integration.mjs"
   },
   "engines": {

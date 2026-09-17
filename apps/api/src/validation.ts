@@ -51,12 +51,20 @@ export const uploadInput = z
     // Null uploads a site image, such as a page cover, outside of any story.
     entryId: z.string().uuid().nullable(),
     name: z.string().min(1).max(250),
-    mime: z.enum(["image/jpeg", "image/png", "image/webp", "video/mp4"]),
+    // video/quicktime is the MOV an iPhone records; it is converted to MP4.
+    mime: z.enum(
+      ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/quicktime"],
+      {
+        errorMap: () => ({
+          message: "只支持 JPG、PNG、WebP 图片和 MP4、MOV 视频",
+        }),
+      },
+    ),
     size: z.number().int().positive(),
   })
   .refine(
-    (v) => v.size <= (v.mime === "video/mp4" ? 200 : 20) * 1024 * 1024,
-    "文件超过大小限制",
+    (v) => v.size <= (v.mime.startsWith("video/") ? 500 : 20) * 1024 * 1024,
+    "文件太大：照片最大 20MB，视频最大 500MB",
   );
 export const visible = { status: "published", visibility: "public" };
 // Images that may be chosen as a page cover: site uploads or public story photos.
