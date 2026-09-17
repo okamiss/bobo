@@ -2,6 +2,8 @@ import {
   useState,
   useEffect,
   useRef,
+  lazy,
+  Suspense,
   createContext,
   useContext,
   type ImgHTMLAttributes,
@@ -546,155 +548,9 @@ export function BodyText({ text }: { text: string }) {
   );
 }
 
-type View = { scale: number; x: number; y: number };
-const unzoomed: View = { scale: 1, x: 0, y: 0 };
+const ImageLightbox = lazy(() => import("./ImagePreview"));
 
-// Viewer gestures: swipe to change photos, pinch or double tap to zoom, and
-// drag to look around a zoomed photo. Works for touch, pen and mouse.
-function ZoomableImage({
-  src,
-  alt,
-  onSwipe,
-}: {
-  src: string;
-  alt: string;
-  onSwipe: (step: 1 | -1) => void;
-}) {
-  const image = useRef<HTMLImageElement>(null);
-  const pointers = useRef(new Map<number, { x: number; y: number }>());
-  const gesture = useRef<{
-    x: number;
-    y: number;
-    view: View;
-    distance: number;
-    moved: boolean;
-  } | null>(null);
-  const lastTap = useRef(0);
-  const [view, setView] = useState(unzoomed),
-    [active, setActive] = useState(false);
-  // Keep a zoomed photo from being dragged out of its frame.
-  const bounded = (v: View): View => {
-    const el = image.current;
-    if (!el || v.scale <= 1) return unzoomed;
-    const maxX = (el.offsetWidth * (v.scale - 1)) / 2,
-      maxY = (el.offsetHeight * (v.scale - 1)) / 2;
-    return {
-      scale: v.scale,
-      x: Math.max(-maxX, Math.min(maxX, v.x)),
-      y: Math.max(-maxY, Math.min(maxY, v.y)),
-    };
-  };
-  const spread = () => {
-    const [a, b] = [...pointers.current.values()];
-    return Math.hypot(a.x - b.x, a.y - b.y);
-  };
-  const begin = (x: number, y: number, moved: boolean) => {
-    gesture.current = {
-      x,
-      y,
-      view,
-      distance: pointers.current.size === 2 ? spread() : 0,
-      moved,
-    };
-  };
-  return (
-    <div className={s.zoomFrame}>
-      <img
-        ref={image}
-        src={src}
-        alt={alt}
-        draggable={false}
-        style={{
-          transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
-          transition: active ? "none" : "transform 0.2s ease-out",
-          cursor: view.scale > 1 ? "grab" : "zoom-in",
-        }}
-        onPointerDown={(e) => {
-          e.currentTarget.setPointerCapture(e.pointerId);
-          pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-          begin(e.clientX, e.clientY, pointers.current.size > 1);
-          setActive(true);
-        }}
-        onPointerMove={(e) => {
-          const start = gesture.current;
-          if (!start || !pointers.current.has(e.pointerId)) return;
-          pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-          if (pointers.current.size === 2 && start.distance) {
-            const scale = (start.view.scale * spread()) / start.distance;
-            setView(
-              bounded({
-                ...start.view,
-                scale: Math.min(4, Math.max(1, scale)),
-              }),
-            );
-          } else if (pointers.current.size === 1) {
-            const dx = e.clientX - start.x,
-              dy = e.clientY - start.y;
-            if (Math.hypot(dx, dy) > 8) start.moved = true;
-            if (start.view.scale > 1)
-              setView(
-                bounded({
-                  ...start.view,
-                  x: start.view.x + dx,
-                  y: start.view.y + dy,
-                }),
-              );
-          }
-        }}
-        onPointerUp={(e) => {
-          pointers.current.delete(e.pointerId);
-          const start = gesture.current;
-          if (!start) return;
-          if (pointers.current.size === 1) {
-            // One finger left a pinch: keep panning from the other one.
-            const [rest] = [...pointers.current.values()];
-            begin(rest.x, rest.y, true);
-            return;
-          }
-          gesture.current = null;
-          setActive(false);
-          const dx = e.clientX - start.x,
-            dy = e.clientY - start.y;
-          if (start.moved) {
-            if (
-              start.view.scale === 1 &&
-              view.scale === 1 &&
-              Math.abs(dx) > 60 &&
-              Math.abs(dx) > Math.abs(dy) * 1.5
-            )
-              onSwipe(dx < 0 ? 1 : -1);
-            return;
-          }
-          if (Date.now() - lastTap.current > 300) {
-            lastTap.current = Date.now();
-            return;
-          }
-          // Double tap: zoom in around the tapped point, or back out.
-          lastTap.current = 0;
-          if (view.scale > 1) return setView(unzoomed);
-          const box = e.currentTarget.getBoundingClientRect(),
-            scale = 2.5;
-          setView(
-            bounded({
-              scale,
-              x: (box.left + box.width / 2 - e.clientX) * (scale - 1),
-              y: (box.top + box.height / 2 - e.clientY) * (scale - 1),
-            }),
-          );
-        }}
-        onPointerCancel={(e) => {
-          pointers.current.delete(e.pointerId);
-          if (!pointers.current.size) {
-            gesture.current = null;
-            setActive(false);
-          }
-        }}
-      />
-    </div>
-  );
-}
-
-export function Lightbox({
+function VideoLightbox({
   items,
   start,
   onClose,
@@ -712,8 +568,9 @@ export function Lightbox({
     document.body.style.overflow = "hidden";
     function key(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
-      if (e.key === "ArrowRight") setIndex((n) => (n + 1) % items.length);
-      if (e.key === "ArrowLeft")
+      if (e.key === "ArrowRight" && items.length > 1)
+        setIndex((n) => (n + 1) % items.length);
+      if (e.key === "ArrowLeft" && items.length > 1)
         setIndex((n) => (n - 1 + items.length) % items.length);
       if (e.key === "Tab") {
         const buttons = Array.from(
@@ -748,7 +605,7 @@ export function Lightbox({
       data-lightbox
       role="dialog"
       aria-modal="true"
-      aria-label="照片与视频查看器"
+      aria-label="视频查看器"
     >
       <button
         ref={close}
@@ -758,28 +615,21 @@ export function Lightbox({
       >
         <X />
       </button>
-      <button
-        onClick={() => setIndex((n) => (n - 1 + items.length) % items.length)}
-        aria-label="上一张"
-      >
-        <ChevronLeft />
-      </button>
+      {items.length > 1 && (
+        <button
+          onClick={() => setIndex((n) => (n - 1 + items.length) % items.length)}
+          aria-label="上一个视频"
+        >
+          <ChevronLeft />
+        </button>
+      )}
       <figure>
         {access.error ? (
           <Status error={access.error} />
         ) : !fresh ? (
           <Status loading />
-        ) : m.kind === "video" ? (
-          <MediaVideo key={m.id} media={fresh} />
         ) : (
-          <ZoomableImage
-            key={m.id}
-            src={fresh.url}
-            alt={m.caption || m.name}
-            onSwipe={(step) =>
-              setIndex((n) => (n + step + items.length) % items.length)
-            }
-          />
+          <MediaVideo key={m.id} media={fresh} />
         )}
         <figcaption>
           {m.caption || m.name}
@@ -791,13 +641,49 @@ export function Lightbox({
           </Link>
         </figcaption>
       </figure>
-      <button
-        onClick={() => setIndex((n) => (n + 1) % items.length)}
-        aria-label="下一张"
-      >
-        <ChevronRight />
-      </button>
+      {items.length > 1 && (
+        <button
+          onClick={() => setIndex((n) => (n + 1) % items.length)}
+          aria-label="下一个视频"
+        >
+          <ChevronRight />
+        </button>
+      )}
     </div>
+  );
+}
+
+export function Lightbox({
+  items,
+  start,
+  onClose,
+}: {
+  items: Media[];
+  start: number;
+  onClose: () => void;
+}) {
+  if (items[start].kind === "image")
+    return (
+      <Suspense
+        fallback={
+          <div className={s.lightbox} role="status">
+            正在打开图片…
+          </div>
+        }
+      >
+        <ImageLightbox items={items} start={start} onClose={onClose} />
+      </Suspense>
+    );
+  const videos = items.filter((item) => item.kind === "video");
+  return (
+    <VideoLightbox
+      items={videos}
+      start={Math.max(
+        0,
+        videos.findIndex((item) => item.id === items[start].id),
+      )}
+      onClose={onClose}
+    />
   );
 }
 
