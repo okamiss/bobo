@@ -457,6 +457,21 @@ function Timeline() {
           ))}
         </select>
         <select
+          aria-label="按月份筛选"
+          value={q.get("month") || ""}
+          onChange={(e) => set("month", e.target.value)}
+        >
+          <option value="">所有月份</option>
+          {Array.from({ length: 12 }, (_, i) => {
+            const month = String(i + 1).padStart(2, "0");
+            return (
+              <option key={month} value={month}>
+                {i + 1} 月
+              </option>
+            );
+          })}
+        </select>
+        <select
           aria-label="按标签筛选"
           value={q.get("tag") || ""}
           onChange={(e) => set("tag", e.target.value)}

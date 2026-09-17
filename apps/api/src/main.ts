@@ -159,6 +159,10 @@ class Content {
           .string()
           .regex(/^\d{4}$/)
           .optional(),
+        month: z
+          .string()
+          .regex(/^(0[1-9]|1[0-2])$/)
+          .optional(),
         kind: z.enum(["daily", "event"]).optional(),
         tag: z.string().max(30).optional(),
         q: z.string().max(100).optional(),
@@ -168,7 +172,16 @@ class Content {
       .parse(query);
     const where: any = {
       ...(admin ? {} : visible),
-      ...(q.year ? { occurredOn: { startsWith: q.year } } : {}),
+      ...(q.year || q.month
+        ? {
+            occurredOn:
+              q.year && q.month
+                ? { startsWith: `${q.year}-${q.month}` }
+                : q.year
+                  ? { startsWith: q.year }
+                  : { contains: `-${q.month}-` },
+          }
+        : {}),
       ...(q.kind ? { kind: q.kind } : {}),
       ...(q.tag ? { tags: { has: q.tag } } : {}),
       ...(q.milestone ? { milestone: true } : {}),

@@ -214,13 +214,14 @@ try {
   report.push("5 万字中文正文可以完整保存");
   const publicList = (
     await request(
-      "/entries?year=2024&tag=%E6%B5%8B%E8%AF%95&q=%E6%B5%8B%E8%AF%95",
+      "/entries?year=2024&month=02&tag=%E6%B5%8B%E8%AF%95&q=%E6%B5%8B%E8%AF%95",
       { auth: false },
     )
   ).data;
   assert(publicList.items.some((x) => x.id === a));
   assert(!publicList.items.some((x) => x.id === b || x.id === c));
   assert(!publicList.tags.includes("私密专属标签"));
+  await request("/entries?month=13", { auth: false, status: 400 });
   await request(`/admin/entries/${a}`, {
     method: "PUT",
     body: payload({ coverMediaId: mb }),
