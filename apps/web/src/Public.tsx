@@ -145,7 +145,7 @@ function Home() {
   const p = useContext(ProfileContext)!;
   const recent = useData<Listing>("/entries?limit=3"),
     special = useData<Listing>("/entries?milestone=true&limit=3"),
-    featured = useData<Listing>("/entries?featured=true&limit=1"),
+    featured = useData<Listing>("/entries?featured=true&limit=6"),
     albums = useData<Album[]>("/albums"),
     memories = useData<{ items: Memory[] }>("/on-this-day");
   const albumCovers = (albums.data || [])

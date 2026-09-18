@@ -1059,6 +1059,9 @@ function EntryEditor() {
           >
             首页精选
           </Checkbox>
+          <p className={s.hint}>
+            精选会出现在首页「偏爱的这一页」，按日期从新到旧最多显示 6 篇。
+          </p>
           <hr />
           <h3>发布设置</h3>
           <label>
