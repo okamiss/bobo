@@ -212,8 +212,9 @@ export class MediaService {
           png: "image/png",
           webp: "image/webp",
         };
-        if (expected[meta.format!] !== m.mime)
-          throw new Error("文件类型与声明不符");
+        // Browsers derive File.type from the file name, so a JPEG saved as
+        // .png arrives declared as image/png. The bytes decide the type.
+        mime = expected[meta.format!];
         const info = await sharp(input)
           .rotate()
           .resize({
