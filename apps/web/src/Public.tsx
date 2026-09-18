@@ -145,7 +145,7 @@ function Home() {
   const p = useContext(ProfileContext)!;
   const recent = useData<Listing>("/entries?limit=3"),
     special = useData<Listing>("/entries?milestone=true&limit=3"),
-    featured = useData<Listing>("/entries?featured=true&limit=6"),
+    featured = useData<Listing>("/entries?featured=true&limit=3"),
     albums = useData<Album[]>("/albums"),
     memories = useData<{ items: Memory[] }>("/on-this-day");
   const albumCovers = (albums.data || [])
@@ -376,7 +376,11 @@ function Home() {
       </section>
       {featured.data?.items.length ? (
         <section className={s.section}>
-          <SectionTitle en="KEPT CLOSE TO HEART" title="偏爱的这一页" />
+          <SectionTitle
+            en="KEPT CLOSE TO HEART"
+            title="偏爱的这一页"
+            to="/timeline?featured=true"
+          />
           <div className={s.cardGrid}>
             {featured.data.items.map((e) => (
               <EntryCard key={e.id} entry={e} />
@@ -498,14 +502,24 @@ function Timeline() {
           <button>搜索</button>
         </form>
       </div>
-      <label className={s.checkLine}>
-        <input
-          type="checkbox"
-          checked={q.get("milestone") === "true"}
-          onChange={(e) => set("milestone", e.target.checked ? "true" : "")}
-        />{" "}
-        只看值得纪念的里程碑
-      </label>
+      <div className={s.checkLines}>
+        <label className={s.checkLine}>
+          <input
+            type="checkbox"
+            checked={q.get("milestone") === "true"}
+            onChange={(e) => set("milestone", e.target.checked ? "true" : "")}
+          />{" "}
+          只看值得纪念的里程碑
+        </label>
+        <label className={s.checkLine}>
+          <input
+            type="checkbox"
+            checked={q.get("featured") === "true"}
+            onChange={(e) => set("featured", e.target.checked ? "true" : "")}
+          />{" "}
+          只看首页精选
+        </label>
+      </div>
       {error ? (
         <Status error={error} />
       ) : !data ? (

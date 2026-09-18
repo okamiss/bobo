@@ -1051,6 +1051,16 @@ hr {
   font-size: 12px;
   margin-top: 17px;
 }
+.checkLines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 26px;
+  margin-top: 17px;
+}
+.checkLines .checkLine {
+  margin-top: 0;
+  margin-bottom: 0;
+}
 .checkLine input {
   width: 14px;
   height: 14px;
