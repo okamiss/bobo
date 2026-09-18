@@ -23,9 +23,22 @@ export const mediaOrder = [
   { position: "asc" as const },
   { id: "asc" as const },
 ];
+// Read addresses are signed for a fixed clock window instead of "five minutes
+// from now", so every page load inside the same window gets a byte-identical
+// address and the browser reuses its cached copy rather than downloading every
+// thumbnail again. The address stays valid until the end of the next window:
+// a story turned private leaves the public pages at once, but an address handed
+// out earlier keeps working for up to two windows.
+const URL_WINDOW = 3600000;
+const mediaCacheControl = `private, max-age=${URL_WINDOW / 1000}, immutable`;
+const windowStart = () => Math.floor(Date.now() / URL_WINDOW) * URL_WINDOW;
 @Injectable()
 export class MediaService {
   private oss: OssClient | undefined;
+  // OSS signs with the current second, so the signed address is reused for the
+  // rest of the window. The API runs as a single instance (see process()).
+  private signed = new Map<string, Promise<string>>();
+  private signedAt = 0;
   constructor() {
     if (config().storage === "oss") this.oss = ossClient();
   }
@@ -440,14 +453,32 @@ export class MediaService {
           ? "display"
           : "original";
     const key = `${m.key}.${suffix}`;
-    if (this.oss)
-      return await this.oss.signatureUrlV4(
-        "GET",
-        300,
-        {},
-        this.objectKey(key),
-      );
-    const expires = Date.now() + 300000;
+    const start = windowStart();
+    const expires = start + 2 * URL_WINDOW;
+    if (this.oss) {
+      if (this.signedAt !== start) {
+        this.signed.clear();
+        this.signedAt = start;
+      }
+      let url = this.signed.get(key);
+      if (!url) {
+        // The object itself is stored with max-age=0, so the response header
+        // is overridden per request; signing it keeps it tamper-proof.
+        url = this.oss
+          .signatureUrlV4(
+            "GET",
+            Math.round((expires - Date.now()) / 1000),
+            { queries: { "response-cache-control": mediaCacheControl } },
+            this.objectKey(key),
+          )
+          .catch((e) => {
+            this.signed.delete(key);
+            throw e;
+          });
+        this.signed.set(key, url);
+      }
+      return await url;
+    }
     return `/api/media/${m.id}/file/${suffix}?expires=${expires}&token=${sign(`${m.id}:${suffix}:${expires}`)}`;
   }
   async present(m: Media) {
@@ -473,7 +504,7 @@ export class MediaService {
       !/^\d{13}$/.test(expires) ||
       !timingSafeEqual(Buffer.from(token), Buffer.from(expected)) ||
       Number(expires) < Date.now() ||
-      Number(expires) > Date.now() + 300000
+      Number(expires) > Date.now() + 2 * URL_WINDOW
     )
       throw new UnauthorizedException();
     const m = await db.media.findUnique({ where: { id } });
@@ -483,7 +514,7 @@ export class MediaService {
       (variant === "original" && m.kind !== "video")
     )
       throw new NotFoundException();
-    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Cache-Control", mediaCacheControl);
     res.type(variant === "original" ? "video/mp4" : "image/webp");
     res.sendFile(this.path(`${m.key}.${variant}`));
   }

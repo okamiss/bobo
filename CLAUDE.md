@@ -57,7 +57,7 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 3. **写入**：生成 `<key>.original`（视频一律为 MP4，`mime`/`size` 更新为最终文件）、`<key>.thumb`（640px WebP）、`<key>.display`（仅图片，2000px WebP），状态改为 `ready`；失败则回到 `pending`，错误信息记在内存的 `failures` 中。
    - `complete` 最多等待 `MEDIA_WAIT_SECONDS`（默认 20，未在 Compose 中暴露，测试时可用 override 设为 0）；超时则返回 `state: "processing"`，处理继续在后台进行，前端 `waitForMedia()` 轮询 `GET /api/admin/media/:id/status`。
 4. **单实例假设**：API 启动时会把残留的 `uploading`/`processing` 重置为 `pending`。
-5. **读取**：`present()` 为 `url`/`thumb` 签发 5 分钟有效的地址（local 用 HMAC token，由 `/api/media/:id/file/:variant` 提供；oss 用 V4 签名 GET）。前端必须通过 `shared.tsx` 的 `MediaImage` / `MediaVideo` 渲染媒体，它们在地址过期时会调用一次 `/api/media/:id/access` 换新地址。
+5. **读取**：`present()` 为 `url`/`thumb` 签发地址（local 用 HMAC token，由 `/api/media/:id/file/:variant` 提供；oss 用 V4 签名 GET）。地址按 `URL_WINDOW`（1 小时）的整点窗口签发而不是「从现在起 N 分钟」，同一窗口内地址逐字节相同，浏览器才能命中缓存；有效期到下一个窗口结束，即 1～2 小时。响应统一带 `private, max-age=3600, immutable`：local 在 `serve()` 里设置（覆盖全局 `no-store`，`sendFile` 不会覆盖已有的该头），oss 把 `response-cache-control` 作为签名 query 覆盖对象自带的 `max-age=0`，因此不必改已有对象的元数据。ali-oss 的 V4 签名带当前秒，所以 OSS 地址在 `MediaService.signed` 中按窗口缓存（依赖单实例假设）。代价：故事改为私密后，已签发地址最长约 2 小时才失效。前端必须通过 `shared.tsx` 的 `MediaImage` / `MediaVideo` 渲染媒体，它们在地址过期时会调用一次 `/api/media/:id/access` 换新地址。
 6. **切换存储**：更换 `STORAGE_DRIVER` 不会迁移已有文件。
 7. **OSS 前缀**：Bucket 与其他项目共用，本站所有对象都在 `OSS_PREFIX`（默认 `bobo`，`config().ossPrefix` 规范化为 `bobo/`）下。OSS 调用一律通过 `MediaService.objectKey()` 加前缀，不要直接拼对象名。旧版本放在根目录的对象用 `scripts/move-oss-objects.cjs` 迁移（`node - copy|delete` 经 stdin 在 api 容器内运行，旧镜像也能用）。
 
