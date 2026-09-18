@@ -846,7 +846,7 @@ function EntryEditor() {
                 ref={fileInput}
                 type="file"
                 multiple
-                accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,.mov"
+                accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,.mov"
                 disabled={uploading}
                 onChange={async (e) => {
                   const selected = Array.from(e.target.files || []).map(
@@ -860,8 +860,8 @@ function EntryEditor() {
             </div>
           </div>
           <p className={s.hint}>
-            照片 ≤20MB；视频 ≤500MB、3 分钟以内，iPhone
-            拍的视频会自动转换格式。上传完成后再保存发布。
+            照片 ≤20MB，支持 JPG、PNG、WebP、GIF，动图会保留动画；视频 ≤500MB、3
+            分钟以内，iPhone 拍的视频会自动转换格式。上传完成后再保存发布。
           </p>
           {tasks.map((t, i) => (
             <div className={s.uploadTask} key={i}>
@@ -2218,7 +2218,7 @@ function GrowthManager() {
   );
 }
 
-const coverTypes = ["image/jpeg", "image/png", "image/webp"];
+const coverTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
 function CoverPicker({
   title,
@@ -2379,7 +2379,7 @@ function ProfileEditor({ refresh }: { refresh: () => void }) {
     null;
   async function upload(file: File, progress: (n: number) => void) {
     if (!coverTypes.includes(file.type))
-      throw new Error("封面只支持 JPG、PNG、WebP 图片");
+      throw new Error("封面只支持 JPG、PNG、WebP、GIF 图片");
     const permit = await api(
       "/admin/media/authorize",
       json("POST", {

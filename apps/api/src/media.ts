@@ -215,20 +215,24 @@ export class MediaService {
         const meta = await sharp(input, {
           limitInputPixels: 60000000,
         }).metadata();
-        if (
-          !["jpeg", "png", "webp"].includes(meta.format || "") ||
-          (meta.pages && meta.pages > 1)
-        )
-          throw new Error("仅支持静态 JPG、PNG、WebP 图片");
         const expected: { [key: string]: string } = {
           jpeg: "image/jpeg",
           png: "image/png",
           webp: "image/webp",
+          gif: "image/gif",
         };
+        if (!expected[meta.format || ""])
+          throw new Error("仅支持 JPG、PNG、WebP、GIF 图片");
         // Browsers derive File.type from the file name, so a JPEG saved as
         // .png arrives declared as image/png. The bytes decide the type.
         mime = expected[meta.format!];
-        const info = await sharp(input)
+        // A GIF or WebP with more than one frame keeps its animation, so every
+        // frame is decoded and resized: the pixel budget covers them all.
+        const frames = meta.pages || 1;
+        const read = { animated: frames > 1, limitInputPixels: 60000000 };
+        if (meta.width! * meta.height! * frames > 60000000)
+          throw new Error("动图太大：请缩小尺寸或减少帧数后再上传");
+        const info = await sharp(input, read)
           .rotate()
           .resize({
             width: 2000,
@@ -239,8 +243,10 @@ export class MediaService {
           .webp({ quality: 85 })
           .toFile(join(temp, "display"));
         width = info.width;
-        height = info.height;
-        await sharp(input)
+        // An animated file is laid out as one tall strip of frames, so the
+        // height to remember is that of a single frame.
+        height = info.pageHeight || info.height;
+        await sharp(input, read)
           .rotate()
           .resize(640, 640, { fit: "inside", withoutEnlargement: true })
           .webp({ quality: 80 })

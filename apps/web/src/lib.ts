@@ -245,6 +245,7 @@ const uploadTypes: Record<string, string> = {
   jpeg: "image/jpeg",
   png: "image/png",
   webp: "image/webp",
+  gif: "image/gif",
   mp4: "video/mp4",
   mov: "video/quicktime",
 };
@@ -253,7 +254,7 @@ export function uploadType(file: File) {
   const mime =
     file.type || uploadTypes[file.name.split(".").pop()!.toLowerCase()] || "";
   if (!Object.values(uploadTypes).includes(mime))
-    throw new Error("只支持 JPG、PNG、WebP 图片和 MP4、MOV 视频");
+    throw new Error("只支持 JPG、PNG、WebP、GIF 图片和 MP4、MOV 视频");
   const video = mime.startsWith("video/");
   if (file.size > (video ? 500 : 20) * 1024 * 1024)
     throw new Error(video ? "视频最大 500MB" : "照片最大 20MB");

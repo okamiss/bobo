@@ -53,7 +53,7 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 ### 媒体管线（media.ts）
 
 1. **授权**：`authorize` 创建 `Media` 行，状态为 `pending`，并返回上传地址。`local` 驱动是 `PUT /api/admin/media/:id/upload`（写入 `<id>.staging`）；`oss` 驱动是预签名 PUT，目标为 `<前缀>staging/<id>`。
-2. **处理**：`complete` 先用 `updateMany` 把状态从 `pending` 改为 `processing` 作为并发锁，然后在 `process()` 中回读 staging 文件并按真实内容校验：图片用 sharp（仅静态 JPEG/PNG/WebP）；视频（MP4 或 iPhone 的 MOV，≤180 秒）用 ffprobe 检查，8 位 H.264 + AAC 的 MP4 原样保留，其他格式在 `transcode()` 中转为 H.264 MP4（长边 ≤1920、≤30fps，HLG/PQ 用 zscale+tonemap 转 SDR，失败再退回不做色调映射；输出色彩标签要用 `setparams` 写到帧上，编码器参数不生效）。转码通过 `transcoding` 队列串行执行。
+2. **处理**：`complete` 先用 `updateMany` 把状态从 `pending` 改为 `processing` 作为并发锁，然后在 `process()` 中回读 staging 文件并按真实内容校验：图片用 sharp（JPEG/PNG/WebP/GIF）。多帧的 GIF 和 WebP 会保留动画：按 `meta.pages` 判断，用 `{ animated: true }` 读取并整段缩放，`宽 × 高 × 帧数` 超过 6000 万像素时报「动图太大」；动图输出是一条竖直帧带，所以存库的高度取 `info.pageHeight`，不是 `info.height`。视频（MP4 或 iPhone 的 MOV，≤180 秒）视频（MP4 或 iPhone 的 MOV，≤180 秒）用 ffprobe 检查，8 位 H.264 + AAC 的 MP4 原样保留，其他格式在 `transcode()` 中转为 H.264 MP4（长边 ≤1920、≤30fps，HLG/PQ 用 zscale+tonemap 转 SDR，失败再退回不做色调映射；输出色彩标签要用 `setparams` 写到帧上，编码器参数不生效）。转码通过 `transcoding` 队列串行执行。
 3. **写入**：生成 `<key>.original`（视频一律为 MP4，`mime`/`size` 更新为最终文件）、`<key>.thumb`（640px WebP）、`<key>.display`（仅图片，2000px WebP），状态改为 `ready`；失败则回到 `pending`，错误信息记在内存的 `failures` 中。
    - `complete` 最多等待 `MEDIA_WAIT_SECONDS`（默认 20，未在 Compose 中暴露，测试时可用 override 设为 0）；超时则返回 `state: "processing"`，处理继续在后台进行，前端 `waitForMedia()` 轮询 `GET /api/admin/media/:id/status`。
 4. **单实例假设**：API 启动时会把残留的 `uploading`/`processing` 重置为 `pending`。

@@ -85,10 +85,17 @@ export const uploadInput = z
     name: z.string().min(1).max(250),
     // video/quicktime is the MOV an iPhone records; it is converted to MP4.
     mime: z.enum(
-      ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/quicktime"],
+      [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/gif",
+        "video/mp4",
+        "video/quicktime",
+      ],
       {
         errorMap: () => ({
-          message: "只支持 JPG、PNG、WebP 图片和 MP4、MOV 视频",
+          message: "只支持 JPG、PNG、WebP、GIF 图片和 MP4、MOV 视频",
         }),
       },
     ),
