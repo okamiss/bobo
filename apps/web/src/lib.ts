@@ -102,6 +102,7 @@ export type Listing = {
   years: string[];
   tags: string[];
 };
+export type ManagedTag = { name: string; count: number };
 export async function api<T = any>(
   path: string,
   options: RequestInit = {},

@@ -1733,6 +1733,34 @@ hr {
   gap: 24px;
   align-items: start;
 }
+.tagManager {
+  display: grid;
+  gap: 16px;
+}
+.tagManager > .hint {
+  margin: 0;
+}
+.managedTags {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.managedTags li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.managedTagName {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.managedTags .hint {
+  margin: 0;
+  white-space: nowrap;
+}
 .healthLayout {
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);

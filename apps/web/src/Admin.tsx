@@ -49,6 +49,7 @@ import {
   KeyRound,
   ChartLine,
   HeartPulse,
+  Tags,
 } from "lucide-react";
 import {
   api,
@@ -62,6 +63,7 @@ import {
   type Profile,
   type Media,
   type Listing,
+  type ManagedTag,
   type Album,
   type AuthUser,
   type Account,
@@ -293,6 +295,11 @@ function AdminContent() {
                 <Settings size={18} /> 啵啵与网站
               </NavLink>
               {user.role === "owner" ? (
+                <NavLink to="/admin/tags">
+                  <Tags size={18} /> 管理标签
+                </NavLink>
+              ) : null}
+              {user.role === "owner" ? (
                 <NavLink to="/admin/accounts">
                   <Users size={18} /> 家庭账号
                 </NavLink>
@@ -346,6 +353,22 @@ function AdminContent() {
               />
               {user.role === "owner" ? (
                 <Route
+                  path="tags"
+                  element={
+                    <>
+                      <AdminHeading
+                        title="管理标签"
+                        text="整理已保存的标签，删除误加或不再使用的标签。"
+                      />
+                      <section className={s.panel}>
+                        <TagManager />
+                      </section>
+                    </>
+                  }
+                />
+              ) : null}
+              {user.role === "owner" ? (
+                <Route
                   path="accounts"
                   element={<AccountManager onChanged={check} />}
                 />
@@ -366,6 +389,91 @@ function Admin() {
         <AdminContent />
       </AntApp>
     </ConfigProvider>
+  );
+}
+
+function TagManager({ onDeleted }: { onDeleted?: (name: string) => void }) {
+  const { data, error, reload } = useData<ManagedTag[]>("/admin/tags");
+  const [search, setSearch] = useState("");
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  if (error) return <Status error={error} />;
+  if (!data) return <Status loading />;
+  const matches = data.filter((tag) =>
+    tag.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
+  );
+  return (
+    <div className={s.tagManager}>
+      <p className={s.hint}>
+        标签来自已保存的记录。删除会从所有记录（含草稿和仅家人可见的记录）中移除同名标签，保留正文和照片。
+      </p>
+      <Input
+        aria-label="搜索标签"
+        placeholder="搜索标签"
+        allowClear
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+      />
+      {notice ? (
+        <Alert type={notice.type} showIcon message={notice.text} />
+      ) : null}
+      {matches.length ? (
+        <ul className={s.managedTags}>
+          {matches.map(({ name, count }) => (
+            <li key={name}>
+              <span className={s.managedTagName}>{name}</span>
+              <span className={s.hint}>{count} 篇记录</span>
+              <Popconfirm
+                title={`删除标签「${name}」？`}
+                description={`将从所有使用它的记录中移除，当前有 ${count} 篇。`}
+                okText="删除标签"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+                disabled={deleting !== null}
+                onConfirm={async () => {
+                  setDeleting(name);
+                  setNotice(null);
+                  try {
+                    const result = await api<{ count: number }>(
+                      "/admin/tags",
+                      json("DELETE", { name }),
+                    );
+                    onDeleted?.(name);
+                    setNotice({
+                      type: "success",
+                      text: `已删除标签「${name}」，从 ${result.count} 篇记录中移除。`,
+                    });
+                    reload();
+                  } catch (caught: any) {
+                    setNotice({ type: "error", text: caught.message });
+                  } finally {
+                    setDeleting(null);
+                  }
+                }}
+              >
+                <Button
+                  danger
+                  size="small"
+                  loading={deleting === name}
+                  disabled={deleting !== null}
+                  aria-label={`删除标签 ${name}`}
+                >
+                  删除
+                </Button>
+              </Popconfirm>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Empty
+          title={data.length ? "没有匹配的标签" : "还没有已保存的标签"}
+          text="在记录中输入标签并保存后，就会出现在这里。"
+        />
+      )}
+    </div>
   );
 }
 
@@ -582,7 +690,8 @@ function EntryEditor() {
   const user = useContext(UserContext);
   const usePublishDefaults = location.state?.usePublishDefaults === true;
   const remote = useData<Entry>(`/admin/entries/${id}`);
-  const tagPool = useData<Listing>("/admin/entries?limit=1");
+  const tagPool = useData<ManagedTag[]>("/admin/tags");
+  const [tagsOpen, setTagsOpen] = useState(false);
   const [form, setForm] = useState<Entry | null>(null),
     [draft, setDraft] = useState<Draft | null>(null),
     [dirty, setDirty] = useState(false),
@@ -1036,7 +1145,10 @@ function EntryEditor() {
                 })
               }
               options={[
-                ...new Set([...(tagPool.data?.tags || []), ...form.tags]),
+                ...new Set([
+                  ...(tagPool.data?.map((tag) => tag.name) || []),
+                  ...form.tags,
+                ]),
               ].map((tag) => ({ value: tag, label: tag }))}
               tokenSeparators={[",", "，"]}
               showSearch={{ optionFilterProp: "label" }}
@@ -1045,6 +1157,62 @@ function EntryEditor() {
               placeholder="选择已有标签，或输入新标签"
             />
           </label>
+          {user?.role === "owner" ? (
+            <>
+              <Button
+                type="link"
+                size="small"
+                icon={<Tags size={14} />}
+                disabled={busy}
+                onClick={() => setTagsOpen(true)}
+              >
+                管理标签
+              </Button>
+              <Modal
+                title="管理标签"
+                open={tagsOpen}
+                footer={null}
+                onCancel={() => setTagsOpen(false)}
+                destroyOnHidden
+              >
+                <TagManager
+                  onDeleted={(name) => {
+                    tagPool.reload();
+                    change({ tags: form.tags.filter((tag) => tag !== name) });
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            entry: {
+                              ...current.entry,
+                              tags: current.entry.tags.filter(
+                                (tag) => tag !== name,
+                              ),
+                            },
+                          }
+                        : null,
+                    );
+                    if (id) {
+                      const saved = drafts.read(id);
+                      if (saved)
+                        drafts.write(
+                          id,
+                          withDraft(form, {
+                            ...saved,
+                            entry: {
+                              ...saved.entry,
+                              tags: saved.entry.tags.filter(
+                                (tag) => tag !== name,
+                              ),
+                            },
+                          }),
+                        );
+                    }
+                  }}
+                />
+              </Modal>
+            </>
+          ) : null}
           <Checkbox
             className={s.checkLine}
             checked={form.milestone}
@@ -1572,7 +1740,7 @@ function AccountManager({
       <section className={`${s.panel} ${s.auditLog}`}>
         <h3>操作记录</h3>
         <p className={s.hint}>
-          家人修改网站资料、页面封面、相册、成长曲线和健康档案时会记在这里，显示最近
+          家人修改网站资料、页面封面、相册、成长曲线和健康档案，以及管理员删除标签时会记在这里，显示最近
           200 条。
         </p>
         {logs.error ? (

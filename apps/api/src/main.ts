@@ -702,6 +702,40 @@ class AdminController {
   @Get("entries") entries(@Query() q: any) {
     return this.content.list(q, true);
   }
+  @Get("tags") async tags() {
+    const entries = await db.entry.findMany({ select: { tags: true } });
+    const counts = new Map<string, number>();
+    for (const entry of entries)
+      for (const name of new Set(entry.tags))
+        counts.set(name, (counts.get(name) ?? 0) + 1);
+    return [...counts]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
+  }
+  @Delete("tags") async removeTag(@Req() req: Request, @Body() body: unknown) {
+    const admin = await owner(req);
+    const { name } = z
+      .object({ name: z.string().trim().min(1).max(30) })
+      .parse(body);
+    return db.$transaction(async (tx) => {
+      // Remove only this exact array item, without overwriting other story fields.
+      const count = await tx.$executeRaw`
+        UPDATE "Entry"
+        SET "tags" = array_remove("tags", ${name}), "updatedAt" = NOW()
+        WHERE ${name} = ANY("tags")
+      `;
+      if (count)
+        await tx.auditLog.create({
+          data: {
+            adminId: admin.id,
+            actorName: admin.displayName,
+            action: "tag.delete",
+            summary: `删除了标签「${name}」，已从 ${count} 篇记录中移除`,
+          },
+        });
+      return { count };
+    });
+  }
   @Get("entries/:id") entry(@Param("id") id: string) {
     return this.content.get(id, true);
   }
