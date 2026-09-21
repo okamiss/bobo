@@ -358,7 +358,7 @@ function AdminContent() {
                     <>
                       <AdminHeading
                         title="管理标签"
-                        text="整理已保存的标签，删除误加或不再使用的标签。"
+                        text="新增固定标签，或重命名、删除已有标签。"
                       />
                       <section className={s.panel}>
                         <TagManager />
@@ -392,14 +392,63 @@ function Admin() {
   );
 }
 
-function TagManager({ onDeleted }: { onDeleted?: (name: string) => void }) {
+type ManagedTagChange =
+  | { type: "create"; name: string }
+  | { type: "rename"; name: string; newName: string }
+  | { type: "delete"; name: string };
+
+const applyManagedTagChange = (tags: string[], change: ManagedTagChange) => {
+  if (change.type === "create") return tags;
+  return [
+    ...new Set(
+      tags.flatMap((tag) => {
+        if (tag !== change.name) return [tag];
+        return change.type === "rename" ? [change.newName] : [];
+      }),
+    ),
+  ];
+};
+
+function TagManager({
+  onChanged,
+}: {
+  onChanged?: (change: ManagedTagChange) => void;
+}) {
   const { data, error, reload } = useData<ManagedTag[]>("/admin/tags");
   const [search, setSearch] = useState("");
+  const [newTag, setNewTag] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<ManagedTag | null>(null);
+  const [renamedTag, setRenamedTag] = useState("");
+  const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [notice, setNotice] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const createTag = async () => {
+    const name = newTag.trim();
+    if (!name || creating) return;
+    setCreating(true);
+    setNotice(null);
+    try {
+      const created = await api<ManagedTag>(
+        "/admin/tags",
+        json("POST", { name }),
+      );
+      setNewTag("");
+      setNotice({
+        type: "success",
+        text: `已新增标签「${created.name}」。`,
+      });
+      onChanged?.({ type: "create", name: created.name });
+      reload();
+    } catch (caught: any) {
+      setNotice({ type: "error", text: caught.message });
+    } finally {
+      setCreating(false);
+    }
+  };
   if (error) return <Status error={error} />;
   if (!data) return <Status loading />;
   const matches = data.filter((tag) =>
@@ -408,8 +457,27 @@ function TagManager({ onDeleted }: { onDeleted?: (name: string) => void }) {
   return (
     <div className={s.tagManager}>
       <p className={s.hint}>
-        标签来自已保存的记录。删除会从所有记录（含草稿和仅家人可见的记录）中移除同名标签，保留正文和照片。
+        新增的固定标签会直接出现在发布页。重命名或删除会同步所有记录（含草稿和仅家人可见的记录），正文和照片不受影响。
       </p>
+      <div className={s.tagCreator}>
+        <Input
+          aria-label="新标签名称"
+          placeholder="输入新标签名称"
+          maxLength={30}
+          value={newTag}
+          onChange={(event) => setNewTag(event.target.value)}
+          onPressEnter={createTag}
+        />
+        <Button
+          type="primary"
+          icon={<Plus size={15} />}
+          loading={creating}
+          disabled={!newTag.trim() || deleting !== null || renaming}
+          onClick={createTag}
+        >
+          新增
+        </Button>
+      </div>
       <Input
         aria-label="搜索标签"
         placeholder="搜索标签"
@@ -426,53 +494,125 @@ function TagManager({ onDeleted }: { onDeleted?: (name: string) => void }) {
             <li key={name}>
               <span className={s.managedTagName}>{name}</span>
               <span className={s.hint}>{count} 篇记录</span>
-              <Popconfirm
-                title={`删除标签「${name}」？`}
-                description={`将从所有使用它的记录中移除，当前有 ${count} 篇。`}
-                okText="删除标签"
-                cancelText="取消"
-                okButtonProps={{ danger: true }}
-                disabled={deleting !== null}
-                onConfirm={async () => {
-                  setDeleting(name);
-                  setNotice(null);
-                  try {
-                    const result = await api<{ count: number }>(
-                      "/admin/tags",
-                      json("DELETE", { name }),
-                    );
-                    onDeleted?.(name);
-                    setNotice({
-                      type: "success",
-                      text: `已删除标签「${name}」，从 ${result.count} 篇记录中移除。`,
-                    });
-                    reload();
-                  } catch (caught: any) {
-                    setNotice({ type: "error", text: caught.message });
-                  } finally {
-                    setDeleting(null);
-                  }
-                }}
-              >
+              <Space size={6}>
                 <Button
-                  danger
                   size="small"
-                  loading={deleting === name}
-                  disabled={deleting !== null}
-                  aria-label={`删除标签 ${name}`}
+                  disabled={deleting !== null || creating || renaming}
+                  aria-label={`编辑标签 ${name}`}
+                  onClick={() => {
+                    setEditing({ name, count });
+                    setRenamedTag(name);
+                    setNotice(null);
+                  }}
                 >
-                  删除
+                  编辑
                 </Button>
-              </Popconfirm>
+                <Popconfirm
+                  title={`删除标签「${name}」？`}
+                  description={`将从所有使用它的记录中移除，当前有 ${count} 篇。`}
+                  okText="删除标签"
+                  cancelText="取消"
+                  okButtonProps={{ danger: true }}
+                  disabled={deleting !== null || creating || renaming}
+                  onConfirm={async () => {
+                    setDeleting(name);
+                    setNotice(null);
+                    try {
+                      const result = await api<{ count: number }>(
+                        "/admin/tags",
+                        json("DELETE", { name }),
+                      );
+                      onChanged?.({ type: "delete", name });
+                      setNotice({
+                        type: "success",
+                        text: `已删除标签「${name}」，从 ${result.count} 篇记录中移除。`,
+                      });
+                      reload();
+                    } catch (caught: any) {
+                      setNotice({ type: "error", text: caught.message });
+                    } finally {
+                      setDeleting(null);
+                    }
+                  }}
+                >
+                  <Button
+                    danger
+                    size="small"
+                    loading={deleting === name}
+                    disabled={deleting !== null || creating || renaming}
+                    aria-label={`删除标签 ${name}`}
+                  >
+                    删除
+                  </Button>
+                </Popconfirm>
+              </Space>
             </li>
           ))}
         </ul>
       ) : (
         <Empty
-          title={data.length ? "没有匹配的标签" : "还没有已保存的标签"}
-          text="在记录中输入标签并保存后，就会出现在这里。"
+          title={data.length ? "没有匹配的标签" : "还没有标签"}
+          text="可以在上方新增固定标签，也可以在记录中输入后保存。"
         />
       )}
+      <Modal
+        title={`编辑标签「${editing?.name || ""}」`}
+        open={!!editing}
+        okText="保存修改"
+        cancelText="取消"
+        confirmLoading={renaming}
+        okButtonProps={{
+          disabled: !renamedTag.trim() || renamedTag.trim() === editing?.name,
+        }}
+        onCancel={() => {
+          if (!renaming) setEditing(null);
+        }}
+        onOk={async () => {
+          if (!editing) return;
+          const newName = renamedTag.trim();
+          if (!newName || newName === editing.name) return;
+          setRenaming(true);
+          setNotice(null);
+          try {
+            const result = await api<{
+              name: string;
+              count: number;
+              merged: boolean;
+            }>("/admin/tags", json("PUT", { name: editing.name, newName }));
+            onChanged?.({
+              type: "rename",
+              name: editing.name,
+              newName: result.name,
+            });
+            setEditing(null);
+            setNotice({
+              type: "success",
+              text: result.merged
+                ? `已将「${editing.name}」合并为「${result.name}」，同步 ${result.count} 篇记录。`
+                : `已将「${editing.name}」改为「${result.name}」，同步 ${result.count} 篇记录。`,
+            });
+            reload();
+          } catch (caught: any) {
+            setNotice({ type: "error", text: caught.message });
+          } finally {
+            setRenaming(false);
+          }
+        }}
+      >
+        <label>
+          新标签名称
+          <Input
+            autoFocus
+            maxLength={30}
+            value={renamedTag}
+            onChange={(event) => setRenamedTag(event.target.value)}
+            onPressEnter={(event) => event.preventDefault()}
+          />
+        </label>
+        <p className={s.hint}>
+          如果新名称已经存在，将合并为同一个标签，并自动去除记录中的重复标签。
+        </p>
+      </Modal>
     </div>
   );
 }
@@ -1176,17 +1316,21 @@ function EntryEditor() {
                 destroyOnHidden
               >
                 <TagManager
-                  onDeleted={(name) => {
+                  onChanged={(managedChange) => {
                     tagPool.reload();
-                    change({ tags: form.tags.filter((tag) => tag !== name) });
+                    if (managedChange.type === "create") return;
+                    change({
+                      tags: applyManagedTagChange(form.tags, managedChange),
+                    });
                     setDraft((current) =>
                       current
                         ? {
                             ...current,
                             entry: {
                               ...current.entry,
-                              tags: current.entry.tags.filter(
-                                (tag) => tag !== name,
+                              tags: applyManagedTagChange(
+                                current.entry.tags,
+                                managedChange,
                               ),
                             },
                           }
@@ -1201,8 +1345,9 @@ function EntryEditor() {
                             ...saved,
                             entry: {
                               ...saved.entry,
-                              tags: saved.entry.tags.filter(
-                                (tag) => tag !== name,
+                              tags: applyManagedTagChange(
+                                saved.entry.tags,
+                                managedChange,
                               ),
                             },
                           }),

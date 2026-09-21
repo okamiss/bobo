@@ -50,6 +50,8 @@ import {
   passwordResetInput,
   measurementInput,
   healthRecordInput,
+  tagCreateInput,
+  tagRenameInput,
 } from "./validation";
 const idSchema = z.string().uuid();
 const shanghaiToday = () =>
@@ -703,8 +705,12 @@ class AdminController {
     return this.content.list(q, true);
   }
   @Get("tags") async tags() {
-    const entries = await db.entry.findMany({ select: { tags: true } });
+    const [saved, entries] = await Promise.all([
+      db.tag.findMany({ select: { name: true } }),
+      db.entry.findMany({ select: { tags: true } }),
+    ]);
     const counts = new Map<string, number>();
+    for (const { name } of saved) counts.set(name, 0);
     for (const entry of entries)
       for (const name of new Set(entry.tags))
         counts.set(name, (counts.get(name) ?? 0) + 1);
@@ -712,11 +718,79 @@ class AdminController {
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
   }
+  @Post("tags") async createTag(@Req() req: Request, @Body() body: unknown) {
+    const admin = await owner(req);
+    const { name } = tagCreateInput.parse(body);
+    try {
+      await db.$transaction(async (tx) => {
+        await tx.tag.create({ data: { name } });
+        await tx.auditLog.create({
+          data: {
+            adminId: admin.id,
+            actorName: admin.displayName,
+            action: "tag.create",
+            summary: `新增了标签「${name}」`,
+          },
+        });
+      });
+      return { name, count: 0 };
+    } catch (error: any) {
+      if (error.code === "P2002")
+        throw new ConflictException("这个标签已经存在");
+      throw error;
+    }
+  }
+  @Put("tags") async renameTag(@Req() req: Request, @Body() body: unknown) {
+    const admin = await owner(req);
+    const { name, newName } = tagRenameInput.parse(body);
+    return db.$transaction(async (tx) => {
+      const [saved, entries] = await Promise.all([
+        tx.tag.findUnique({ where: { name } }),
+        tx.entry.findMany({
+          where: { tags: { has: name } },
+          select: { id: true, tags: true },
+        }),
+      ]);
+      if (!saved && !entries.length)
+        throw new NotFoundException("这个标签不存在");
+      if (name === newName)
+        return { name, count: entries.length, merged: false };
+      const [target, targetUsage] = await Promise.all([
+        tx.tag.findUnique({ where: { name: newName } }),
+        tx.entry.count({ where: { tags: { has: newName } } }),
+      ]);
+      await tx.tag.upsert({
+        where: { name: newName },
+        create: { name: newName },
+        update: {},
+      });
+      for (const entry of entries)
+        await tx.entry.update({
+          where: { id: entry.id },
+          data: {
+            tags: [
+              ...new Set(
+                entry.tags.map((tag) => (tag === name ? newName : tag)),
+              ),
+            ],
+          },
+        });
+      await tx.tag.deleteMany({ where: { name } });
+      const merged = !!target || targetUsage > 0;
+      await tx.auditLog.create({
+        data: {
+          adminId: admin.id,
+          actorName: admin.displayName,
+          action: "tag.rename",
+          summary: `将标签「${name}」改为「${newName}」，已同步 ${entries.length} 篇记录${merged ? "并合并同名标签" : ""}`,
+        },
+      });
+      return { name: newName, count: entries.length, merged };
+    });
+  }
   @Delete("tags") async removeTag(@Req() req: Request, @Body() body: unknown) {
     const admin = await owner(req);
-    const { name } = z
-      .object({ name: z.string().trim().min(1).max(30) })
-      .parse(body);
+    const { name } = tagCreateInput.parse(body);
     return db.$transaction(async (tx) => {
       // Remove only this exact array item, without overwriting other story fields.
       const count = await tx.$executeRaw`
@@ -724,7 +798,8 @@ class AdminController {
         SET "tags" = array_remove("tags", ${name}), "updatedAt" = NOW()
         WHERE ${name} = ANY("tags")
       `;
-      if (count)
+      const removed = await tx.tag.deleteMany({ where: { name } });
+      if (count || removed.count)
         await tx.auditLog.create({
           data: {
             adminId: admin.id,
@@ -781,12 +856,13 @@ class AdminController {
       existing.media.some((m) => m.state !== "ready")
     )
       throw new BadRequestException("请完成或移除未成功的上传后再发布");
+    const tags = [...new Set(data.tags)];
     await db.$transaction(async (tx) => {
       await tx.entry.update({
         where: { id },
         data: {
           ...data,
-          tags: [...new Set(data.tags)],
+          tags,
           authorId: existing.authorId ?? admin.id,
           publishedAt:
             data.status === "published"
@@ -794,6 +870,11 @@ class AdminController {
               : existing.publishedAt,
         },
       });
+      if (tags.length)
+        await tx.tag.createMany({
+          data: tags.map((name) => ({ name })),
+          skipDuplicates: true,
+        });
       if (media)
         for (const [position, m] of media.entries())
           await tx.media.update({

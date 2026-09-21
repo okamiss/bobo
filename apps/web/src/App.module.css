@@ -1740,6 +1740,11 @@ hr {
 .tagManager > .hint {
   margin: 0;
 }
+.tagCreator {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
 .managedTags {
   list-style: none;
   padding: 0;
@@ -1760,6 +1765,14 @@ hr {
 .managedTags .hint {
   margin: 0;
   white-space: nowrap;
+}
+@media (max-width: 560px) {
+  .managedTags li {
+    flex-wrap: wrap;
+  }
+  .managedTagName {
+    flex-basis: calc(100% - 90px);
+  }
 }
 .healthLayout {
   display: grid;

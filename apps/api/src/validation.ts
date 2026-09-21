@@ -38,12 +38,19 @@ export const healthRecordInput = z
     message: "下次时间不能早于本次日期",
     path: ["nextDueOn"],
   });
+export const tagName = z
+  .string()
+  .trim()
+  .min(1, "标签不能为空")
+  .max(30, "标签最多 30 个字符");
+export const tagCreateInput = z.object({ name: tagName });
+export const tagRenameInput = z.object({ name: tagName, newName: tagName });
 export const entryInput = z.object({
   title: z.string().trim().min(1).max(150),
   occurredOn: date,
   kind: z.enum(["daily", "event"]),
   body: z.string().max(50000),
-  tags: z.array(z.string().trim().min(1).max(30)).max(20),
+  tags: z.array(tagName).max(20),
   status: z.enum(["draft", "published"]),
   visibility: z.enum(["public", "private"]),
   milestone: z.boolean(),
