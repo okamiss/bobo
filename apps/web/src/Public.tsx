@@ -37,6 +37,7 @@ import {
   type Media,
 } from "./lib";
 import s from "./App.module.css";
+import launcher from "./assets/bobo-chat-launcher.webp";
 import {
   ProfileContext,
   useData,
@@ -153,12 +154,23 @@ function Layout() {
                 <Chat onClose={() => setChat(false)} />
               </Suspense>
             )}
+            {/* The whole sticker is the button. The Chinese line is rendered
+                here rather than painted into the artwork, so it stays sharp
+                at any size and can be reworded without a new drawing. */}
             <button
-              className={`${s.chatBubble} ${chat ? s.chatBubbleOpen : ""}`}
+              className={`${s.chatLauncher} ${chat ? s.chatLauncherOpen : ""}`}
               onClick={() => setChat((v) => !v)}
-              aria-label={chat ? "收起和啵啵的聊天" : "和啵啵聊天"}
+              aria-label={chat ? "收起和啵啵的聊天" : "打开啵啵聊天"}
             >
-              <BoboIllustration />
+              <span className={s.chatLauncherBubble}>
+                来问啵啵呀
+                <span className={s.chatLauncherHeart} aria-hidden="true">
+                  ♥
+                </span>
+              </span>
+              <span className={s.chatLauncherDog}>
+                <img src={launcher} alt="" />
+              </span>
             </button>
           </>
         )}
