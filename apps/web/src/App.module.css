@@ -3486,3 +3486,26 @@ hr {
     font-size: 16px;
   }
 }
+.quotaHead {
+  margin: 20px 0 0;
+  font-size: 13px;
+  color: #666e5c;
+}
+.quotaRows {
+  display: grid;
+  gap: 6px;
+}
+.quotaRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  background: #f8f8ef;
+  border: 1px solid var(--border);
+  padding: 8px 11px;
+  font-size: 13px;
+}
+.quotaRow small {
+  font-size: 11px;
+  color: #a6ac98;
+}

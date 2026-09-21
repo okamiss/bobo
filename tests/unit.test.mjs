@@ -8,6 +8,7 @@ const {
   date,
   uploadInput,
   healthRecordInput,
+  aiQuotaInput,
 } = require("../apps/api/dist/validation.js");
 const {
   hashPassword,
@@ -271,4 +272,13 @@ test("tool arguments from the model are validated before any query runs", async 
   await assert.rejects(() => runTool("search_stories", { month: "13" }));
   await assert.rejects(() => runTool("health_records", { kind: "everything" }));
   await assert.rejects(() => runTool("growth_records", { limit: 999 }));
+});
+
+test("the owner's AI allowance only accepts whole counts in range", () => {
+  assert.equal(aiQuotaInput.safeParse({ draft: 0, chat: 0 }).success, true);
+  assert.equal(aiQuotaInput.safeParse({ draft: 500, chat: 500 }).success, true);
+  assert.equal(aiQuotaInput.safeParse({ draft: -1, chat: 5 }).success, false);
+  assert.equal(aiQuotaInput.safeParse({ draft: 5, chat: 501 }).success, false);
+  assert.equal(aiQuotaInput.safeParse({ draft: 1.5, chat: 5 }).success, false);
+  assert.equal(aiQuotaInput.safeParse({ draft: "3", chat: 5 }).success, false);
 });

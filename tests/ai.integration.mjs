@@ -275,6 +275,59 @@ try {
     "前台聊天入口的提示 cookie：登录下发、老会话补发、失效清除、访客没有",
   );
 
+  // The daily allowance belongs to the owner: members see neither the panel
+  // nor the setting, and the change applies without a restart.
+  const quotas = (await request("/admin/ai/quotas")).data;
+  const original = { draft: quotas.draft, chat: quotas.chat };
+  assert.equal(typeof quotas.draft, "number");
+  assert.equal(Array.isArray(quotas.today), true);
+  await request("/admin/ai/quotas", { cookie: member, status: 403 });
+  await request("/admin/ai/quotas", {
+    method: "PUT",
+    cookie: member,
+    body: { draft: 999, chat: 999 },
+    status: 403,
+  });
+  for (const bad of [
+    { draft: -1, chat: 5 },
+    { draft: 5, chat: 501 },
+    { draft: 1.5, chat: 5 },
+    { draft: "x", chat: 5 },
+  ])
+    await request("/admin/ai/quotas", {
+      method: "PUT",
+      body: bad,
+      status: 400,
+    });
+  await request("/admin/ai/quotas", {
+    method: "PUT",
+    body: { draft: 3, chat: 7 },
+  });
+  const seen = (await request("/admin/ai/status", { cookie: member })).data;
+  assert.equal(seen.quota, 3);
+  assert.equal(seen.chatQuota, 7);
+
+  // Zero is the owner's off switch, without touching .env.
+  await request("/admin/ai/quotas", {
+    method: "PUT",
+    body: { draft: 0, chat: 0 },
+  });
+  if (status.enabled) {
+    const refused = await request("/admin/ai/draft", {
+      method: "POST",
+      cookie: member,
+      body: draft(),
+      status: 403,
+    });
+    assert.match(refused.data.message, /关闭/);
+  }
+  const log = (await request("/admin/audit-logs")).data;
+  assert.match(log[0].summary, /AI 额度/);
+  await request("/admin/ai/quotas", { method: "PUT", body: original });
+  report.push(
+    "AI 额度只有家庭管理员能改，改后立即生效、可设 0 关闭并记入操作记录",
+  );
+
   console.log(JSON.stringify({ enabled: status.enabled, report }, null, 2));
 } finally {
   if (memberId)

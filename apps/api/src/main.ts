@@ -53,6 +53,7 @@ import {
   healthRecordInput,
   tagCreateInput,
   tagRenameInput,
+  aiQuotaInput,
 } from "./validation";
 const idSchema = z.string().uuid();
 const shanghaiToday = () =>
@@ -1217,6 +1218,27 @@ class AdminController {
   }
   @Post("ai/draft") async aiDraft(@Req() req: Request, @Body() body: unknown) {
     return this.ai.draft(await currentAdmin(req), body);
+  }
+  @Get("ai/quotas") async aiQuotas(@Req() req: Request) {
+    await owner(req);
+    return this.ai.usage();
+  }
+  @Put("ai/quotas") async setAiQuotas(
+    @Req() req: Request,
+    @Body() body: unknown,
+  ) {
+    const admin = await owner(req);
+    const v = aiQuotaInput.parse(body);
+    await db.profile.update({
+      where: { id: 1 },
+      data: { aiDraftQuota: v.draft, aiChatQuota: v.chat },
+    });
+    await audit(
+      admin,
+      "ai.quotas",
+      `把每人每天的 AI 额度改为写作 ${v.draft} 次、聊天 ${v.chat} 句`,
+    );
+    return this.ai.usage();
   }
   @Get("ai/conversations") async aiConversations(@Req() req: Request) {
     return this.ai.conversations(await currentAdmin(req));

@@ -67,6 +67,7 @@ import {
   type ManagedTag,
   type AiStatus,
   type AiDraft,
+  type AiQuotas,
   type Album,
   type AuthUser,
   type Account,
@@ -1931,6 +1932,98 @@ function AlbumEditor() {
   );
 }
 
+// Only the family owner reaches this page, so the panel is plain: two numbers,
+// plus what everyone has used today so the numbers are not chosen blind.
+function AiQuotaPanel() {
+  const { data, error, reload } = useData<AiQuotas>("/admin/ai/quotas");
+  const [form, setForm] = useState<{ draft: string; chat: string } | null>(
+    null,
+  );
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  useEffect(() => {
+    if (data && !form)
+      setForm({ draft: String(data.draft), chat: String(data.chat) });
+  }, [data, form]);
+  if (error) return <Status error={error} />;
+  if (!data || !form) return <Status loading />;
+  const save = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await api(
+        "/admin/ai/quotas",
+        json("PUT", { draft: Number(form.draft), chat: Number(form.chat) }),
+      );
+      await reload();
+      setNotice({ type: "success", text: "已保存，立即对所有家人生效。" });
+    } catch (e: any) {
+      setNotice({ type: "error", text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className={`${s.panel} ${s.auditLog}`}>
+      <h3>AI 额度</h3>
+      <p className={s.hint}>
+        每个家庭账号每天可以用多少次，按上海时区每天零点重置。填 0
+        表示关闭该功能。这是防止意外用量的上限，真正的花费上限是 AI
+        服务账户里的余额。
+      </p>
+      {notice ? (
+        <Alert type={notice.type} showIcon message={notice.text} />
+      ) : null}
+      <div className={s.formRow}>
+        <label>
+          每人每天可用「AI 帮我写」
+          <Input
+            type="number"
+            min={0}
+            max={500}
+            value={form.draft}
+            onChange={(e) => setForm({ ...form, draft: e.target.value })}
+          />
+        </label>
+        <label>
+          每人每天可和啵啵聊
+          <Input
+            type="number"
+            min={0}
+            max={500}
+            value={form.chat}
+            onChange={(e) => setForm({ ...form, chat: e.target.value })}
+          />
+        </label>
+      </div>
+      <Space wrap>
+        <Button type="primary" loading={busy} onClick={save}>
+          保存额度
+        </Button>
+        <span className={s.hint}>修改会记入操作记录。</span>
+      </Space>
+      <h4 className={s.quotaHead}>今天的用量</h4>
+      {data.today.every((u) => !u.draft && !u.chat) ? (
+        <p className={s.hint}>今天还没有人用过。</p>
+      ) : (
+        <div className={s.quotaRows}>
+          {data.today.map((u) => (
+            <div className={s.quotaRow} key={u.id}>
+              <span>{u.displayName}</span>
+              <small>
+                写作 {u.draft} / {data.draft} · 聊天 {u.chat} / {data.chat}
+              </small>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function AccountManager({
   onChanged,
 }: {
@@ -2138,6 +2231,7 @@ function AccountManager({
           )}
         </section>
       </div>
+      <AiQuotaPanel />
       <section className={`${s.panel} ${s.auditLog}`}>
         <h3>操作记录</h3>
         <p className={s.hint}>

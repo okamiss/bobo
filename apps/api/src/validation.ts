@@ -51,6 +51,11 @@ export const aiDraftInput = z.object({
   kind: z.enum(["daily", "event"]),
   hint: z.string().trim().max(200),
 });
+// Daily allowance per account. 0 turns the feature off without touching .env.
+export const aiQuotaInput = z.object({
+  draft: z.number().int().min(0, "不能小于 0").max(500, "最多 500 次"),
+  chat: z.number().int().min(0, "不能小于 0").max(500, "最多 500 句"),
+});
 export const aiMessageInput = z.object({
   text: z
     .string()

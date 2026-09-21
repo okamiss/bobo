@@ -17,8 +17,9 @@ import { z } from "zod";
 
 // One model call may not outlive the Nginx proxy (proxy_read_timeout 180s).
 const TIMEOUT = 90000;
-// Per account, per day. Generous for a family journal, low enough that a stuck
-// client cannot run up a bill.
+// Per account, per day, so a stuck client cannot run up a bill. These are the
+// defaults for a new site; the family owner adjusts them in the admin, and the
+// real spending ceiling is the balance on the model account.
 export const DRAFT_QUOTA = 20;
 export const CHAT_QUOTA = 50;
 const MAX_OUTPUT = 4000;
@@ -74,22 +75,66 @@ export class AiService {
       );
     return this.ai;
   }
+  // The owner's setting, falling back to the defaults on a site whose profile
+  // row predates them.
+  async quotas() {
+    const p = await db.profile.findUnique({ where: { id: 1 } });
+    return {
+      draft: p?.aiDraftQuota ?? DRAFT_QUOTA,
+      chat: p?.aiChatQuota ?? CHAT_QUOTA,
+    };
+  }
   // Calls left today, so the page can show the number before spending one.
-  async remaining(adminId: string, kind: "draft" | "chat") {
+  async remaining(adminId: string, kind: "draft" | "chat", limit?: number) {
+    const quota = limit ?? (await this.quotas())[kind];
     const used = await db.aiUsage.count({
       where: { adminId, kind, createdAt: { gte: startOfToday() } },
     });
-    return Math.max(0, (kind === "draft" ? DRAFT_QUOTA : CHAT_QUOTA) - used);
+    return Math.max(0, quota - used);
   }
   async status(admin: Admin) {
+    const quota = await this.quotas();
     return {
       enabled: this.enabled,
       model: this.model,
       consented: !!admin.aiConsentAt,
-      remaining: this.enabled ? await this.remaining(admin.id, "draft") : 0,
-      quota: DRAFT_QUOTA,
-      chatRemaining: this.enabled ? await this.remaining(admin.id, "chat") : 0,
-      chatQuota: CHAT_QUOTA,
+      remaining: this.enabled
+        ? await this.remaining(admin.id, "draft", quota.draft)
+        : 0,
+      quota: quota.draft,
+      chatRemaining: this.enabled
+        ? await this.remaining(admin.id, "chat", quota.chat)
+        : 0,
+      chatQuota: quota.chat,
+    };
+  }
+  // What the owner sees when setting the allowance: the limits plus how much
+  // each account has used today, so the number is not chosen blind.
+  async usage() {
+    const quota = await this.quotas();
+    const [accounts, rows] = await Promise.all([
+      db.admin.findMany({
+        orderBy: { username: "asc" },
+        select: { id: true, displayName: true },
+      }),
+      db.aiUsage.groupBy({
+        by: ["adminId", "kind"],
+        where: { createdAt: { gte: startOfToday() } },
+        _count: { _all: true },
+      }),
+    ]);
+    return {
+      ...quota,
+      today: accounts.map((a) => ({
+        id: a.id,
+        displayName: a.displayName,
+        draft:
+          rows.find((r) => r.adminId === a.id && r.kind === "draft")?._count
+            ._all || 0,
+        chat:
+          rows.find((r) => r.adminId === a.id && r.kind === "chat")?._count
+            ._all || 0,
+      })),
     };
   }
   private async spend(
@@ -114,9 +159,16 @@ export class AiService {
     const settings = this.settings();
     if (!admin.aiConsentAt)
       throw new ForbiddenException("请先同意把内容发送给 AI 服务");
-    if ((await this.remaining(admin.id, kind)) <= 0)
+    const quota = (await this.quotas())[kind];
+    if (quota <= 0)
+      throw new ForbiddenException(
+        kind === "draft"
+          ? "家庭管理员已关闭「AI 帮我写」"
+          : "家庭管理员已关闭和啵啵聊天",
+      );
+    if ((await this.remaining(admin.id, kind, quota)) <= 0)
       throw new HttpException(
-        `今天的 AI 次数已经用完（每人每天 ${kind === "draft" ? DRAFT_QUOTA : CHAT_QUOTA} 次），明天再来吧`,
+        `今天的次数已经用完（每人每天 ${quota} 次），明天再来吧`,
         429,
       );
     return settings;

@@ -73,6 +73,9 @@ model Profile {
   coverMediaId      String?
   aboutCoverMediaId String?
   growthPublic      Boolean @default(false)
+  // Daily AI allowance per account, set by the family owner. 0 turns it off.
+  aiDraftQuota      Int     @default(20)
+  aiChatQuota       Int     @default(50)
 }
 
 // One growth measurement per day; weight in kg, shoulder height in cm.

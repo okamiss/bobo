@@ -112,6 +112,11 @@ export type AiStatus = {
   chatRemaining: number;
   chatQuota: number;
 };
+export type AiQuotas = {
+  draft: number;
+  chat: number;
+  today: { id: string; displayName: string; draft: number; chat: number }[];
+};
 export type AiSource = {
   id: string;
   title: string;
