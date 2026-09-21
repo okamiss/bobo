@@ -22,6 +22,7 @@ export type Entry = {
   visibility: "public" | "private";
   milestone: boolean;
   featured: boolean;
+  publishedAt?: string | null;
   coverMediaId: string | null;
   authorId: string | null;
   author: { displayName: string } | null;
@@ -165,6 +166,33 @@ export const today = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(
     new Date(),
   );
+// The clock time a story went up, to tell apart several stories from one day.
+// Only shown when it was published on the day it is filed under: a story
+// backdated to last month must not borrow today's clock.
+export function postedTime(entry: {
+  occurredOn: string;
+  publishedAt?: string | null;
+}) {
+  if (!entry.publishedAt) return "";
+  const at = new Date(entry.publishedAt);
+  if (isNaN(+at)) return "";
+  const shanghai = (options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Shanghai",
+      ...options,
+    }).format(at);
+  if (
+    shanghai({ year: "numeric", month: "2-digit", day: "2-digit" }) !==
+    entry.occurredOn.split("-").reverse().join("/")
+  )
+    return "";
+  return shanghai({
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
 export function daysSince(date: string, at = today()) {
   return Math.floor(
     (Date.parse(`${at}T00:00:00Z`) - Date.parse(`${date}T00:00:00Z`)) /

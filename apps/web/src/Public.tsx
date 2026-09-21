@@ -35,6 +35,7 @@ import {
   type Listing,
   type Album,
   type Media,
+  postedTime,
 } from "./lib";
 import s from "./App.module.css";
 import launcher from "./assets/bobo-chat-launcher.webp";
@@ -581,7 +582,10 @@ function Timeline() {
                 >
                   <div className={s.day}>
                     {e.occurredOn.slice(8)}
-                    <small>{e.kind === "event" ? "EVENT" : "DAILY"}</small>
+                    <small>
+                      {postedTime(e) ||
+                        (e.kind === "event" ? "EVENT" : "DAILY")}
+                    </small>
                   </div>
                   <Link to={`/stories/${e.id}`} className={s.timelineContent}>
                     <div>

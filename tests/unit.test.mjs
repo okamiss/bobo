@@ -35,6 +35,7 @@ const {
   valueTicks,
   monthTicks,
   healthReminder,
+  postedTime,
 } = await import(
   `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
 );
@@ -281,4 +282,45 @@ test("the owner's AI allowance only accepts whole counts in range", () => {
   assert.equal(aiQuotaInput.safeParse({ draft: 5, chat: 501 }).success, false);
   assert.equal(aiQuotaInput.safeParse({ draft: 1.5, chat: 5 }).success, false);
   assert.equal(aiQuotaInput.safeParse({ draft: "3", chat: 5 }).success, false);
+});
+
+test("a story shows the clock time only for the day it is filed under", () => {
+  // 2026-09-21 14:32:07 Shanghai is 06:32:07 UTC.
+  const sameDay = {
+    occurredOn: "2026-09-21",
+    publishedAt: "2026-09-21T06:32:07.000Z",
+  };
+  assert.equal(postedTime(sameDay), "14:32:07");
+  // Just before midnight Shanghai, still the same local day.
+  assert.equal(
+    postedTime({
+      occurredOn: "2026-09-21",
+      publishedAt: "2026-09-21T15:59:00.000Z",
+    }),
+    "23:59:00",
+  );
+  // The same instant belongs to the next day in Shanghai.
+  assert.equal(
+    postedTime({
+      occurredOn: "2026-09-21",
+      publishedAt: "2026-09-21T16:00:00.000Z",
+    }),
+    "",
+    "跨过上海零点后就不再算同一天",
+  );
+  // A story backdated to an earlier day must not borrow the publish clock.
+  assert.equal(
+    postedTime({
+      occurredOn: "2026-09-18",
+      publishedAt: "2026-09-21T07:48:00.000Z",
+    }),
+    "",
+  );
+  // Drafts and bad data simply show no time.
+  assert.equal(postedTime({ occurredOn: "2026-09-21", publishedAt: null }), "");
+  assert.equal(postedTime({ occurredOn: "2026-09-21" }), "");
+  assert.equal(
+    postedTime({ occurredOn: "2026-09-21", publishedAt: "nonsense" }),
+    "",
+  );
 });

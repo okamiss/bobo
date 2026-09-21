@@ -10,6 +10,13 @@ import { date } from "./validation";
 // that checks what comes back, so the two cannot drift apart. Tool arguments
 // are model output, so they are validated exactly like a request body.
 
+// Same order the site itself uses, so "最近一次" means the same thing here.
+export const entryOrder = [
+  { occurredOn: "desc" as const },
+  { publishedAt: { sort: "desc" as const, nulls: "last" as const } },
+  { createdAt: "desc" as const },
+  { id: "desc" as const },
+];
 const MAX_RESULTS = 8;
 const MAX_BODY = 4000;
 
@@ -214,7 +221,7 @@ export async function runTool(name: string, rawArgs: unknown) {
     const rows = await db.entry.findMany({
       where,
       select,
-      orderBy: [{ occurredOn: "desc" }, { id: "desc" }],
+      orderBy: entryOrder,
       take: MAX_RESULTS,
     });
     sources.push(...rows.map(source));
@@ -338,7 +345,7 @@ export async function runTool(name: string, rawArgs: unknown) {
       occurredOn: { endsWith: day.slice(4), not: day },
     },
     select,
-    orderBy: { occurredOn: "desc" },
+    orderBy: entryOrder,
     take: MAX_RESULTS,
   });
   sources.push(...rows.map(source));

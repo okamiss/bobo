@@ -75,6 +75,7 @@ import {
   type HealthRecord,
   type AuditEntry,
   healthReminder,
+  postedTime,
 } from "./lib";
 import s from "./App.module.css";
 import {
@@ -680,8 +681,9 @@ function AdminEntries() {
                 <Link to={`/admin/entries/${e.id}`}>
                   <h3>{e.title}</h3>
                   <small>
-                    {e.occurredOn} · {e.media.length} 个媒体{" "}
-                    {e.milestone ? "· 里程碑" : ""}
+                    {e.occurredOn}
+                    {postedTime(e) ? ` ${postedTime(e)}` : ""} ·{" "}
+                    {e.media.length} 个媒体 {e.milestone ? "· 里程碑" : ""}
                     {e.author ? ` · ${e.author.displayName} 记录` : ""}
                   </small>
                 </Link>

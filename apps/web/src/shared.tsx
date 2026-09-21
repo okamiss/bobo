@@ -32,6 +32,7 @@ import {
   type Profile,
   type Media,
   type Measurement,
+  postedTime,
 } from "./lib";
 import s from "./App.module.css";
 import illustration from "./assets/illustration.webp";
@@ -491,7 +492,8 @@ export function EntryCard({ entry, note }: { entry: Entry; note?: string }) {
         {note ? <span className={s.cardNote}>{note}</span> : null}
       </div>
       <div className={s.cardMeta}>
-        {entry.occurredOn.replaceAll("-", ".")}{" "}
+        {entry.occurredOn.replaceAll("-", ".")}
+        {postedTime(entry) ? ` ${postedTime(entry)}` : ""}{" "}
         <span>{entry.kind === "event" ? "特别的一天" : "日常碎片"}</span>
         {entry.author ? <span> · {entry.author.displayName} 记录</span> : null}
       </div>
@@ -727,7 +729,8 @@ export function StoryView({
   return (
     <article className={s.story}>
       <div className={s.storyMeta}>
-        {entry.occurredOn.replaceAll("-", ".")} <span>·</span>{" "}
+        {entry.occurredOn.replaceAll("-", ".")}
+        {postedTime(entry) ? ` ${postedTime(entry)}` : ""} <span>·</span>{" "}
         {entry.kind === "event" ? "特别的一天" : "日常碎片"}{" "}
         {entry.author ? <span>· {entry.author.displayName} 记录</span> : null}{" "}
         {p?.birthday && age(p.birthday, entry.occurredOn) && (

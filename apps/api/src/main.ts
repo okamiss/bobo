@@ -56,6 +56,18 @@ import {
   aiQuotaInput,
 } from "./validation";
 const idSchema = z.string().uuid();
+// Stories are ordered by the day they happened, and within one day by when
+// they went up, newest first: several stories a day used to come back in the
+// order of their random uuids. A draft has no publish time yet, so it falls
+// back to when it was written and sits after the published ones of that day.
+// The id only breaks an exact tie; the previous/next queries in get() walk
+// this same order and must be changed with it.
+const entryOrder = [
+  { occurredOn: "desc" as const },
+  { publishedAt: { sort: "desc" as const, nulls: "last" as const } },
+  { createdAt: "desc" as const },
+  { id: "desc" as const },
+];
 const shanghaiToday = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(
     new Date(),
@@ -203,7 +215,7 @@ class Content {
     const [items, total, facets] = await Promise.all([
       db.entry.findMany({
         where,
-        orderBy: [{ occurredOn: "desc" }, { id: "desc" }],
+        orderBy: entryOrder,
         skip: (q.page - 1) * q.limit,
         take: q.limit,
         include: {
@@ -241,6 +253,10 @@ class Content {
     });
     if (!entry) throw new NotFoundException("这篇故事暂时没有公开");
     const select = { id: true, title: true, occurredOn: true };
+    // Walk the same order as the timeline. Only published stories are reachable
+    // here and publishing always stamps publishedAt, so it is never null; the
+    // fallback keeps a hand-edited row from losing its neighbours.
+    const at = entry.publishedAt ?? entry.createdAt;
     const [previous, next] = admin
       ? [null, null]
       : await Promise.all([
@@ -249,22 +265,40 @@ class Content {
               ...visible,
               OR: [
                 { occurredOn: { gt: entry.occurredOn } },
-                { occurredOn: entry.occurredOn, id: { gt: id } },
+                { occurredOn: entry.occurredOn, publishedAt: { gt: at } },
+                {
+                  occurredOn: entry.occurredOn,
+                  publishedAt: at,
+                  id: { gt: id },
+                },
               ],
             },
             select,
-            orderBy: [{ occurredOn: "asc" }, { id: "asc" }],
+            orderBy: [
+              { occurredOn: "asc" },
+              { publishedAt: { sort: "asc", nulls: "first" } },
+              { id: "asc" },
+            ],
           }),
           db.entry.findFirst({
             where: {
               ...visible,
               OR: [
                 { occurredOn: { lt: entry.occurredOn } },
-                { occurredOn: entry.occurredOn, id: { lt: id } },
+                { occurredOn: entry.occurredOn, publishedAt: { lt: at } },
+                {
+                  occurredOn: entry.occurredOn,
+                  publishedAt: at,
+                  id: { lt: id },
+                },
               ],
             },
             select,
-            orderBy: [{ occurredOn: "desc" }, { id: "desc" }],
+            orderBy: [
+              { occurredOn: "desc" },
+              { publishedAt: { sort: "desc", nulls: "last" } },
+              { id: "desc" },
+            ],
           }),
         ]);
     return {
@@ -353,7 +387,7 @@ class Content {
         ...visible,
         occurredOn: { endsWith: today.slice(7), lt: today },
       },
-      orderBy: [{ occurredOn: "desc" }, { id: "desc" }],
+      orderBy: entryOrder,
       include: {
         author: { select: { displayName: true } },
         media: { orderBy: mediaOrder, where: { attached: true } },
