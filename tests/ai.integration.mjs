@@ -199,23 +199,81 @@ try {
   report.push("聊天会话按账号隔离，别人既读不到也删不掉");
 
   if (status.enabled) {
-    // An empty or oversized question never reaches the model.
+    // An empty or oversized question never reaches the model. The member is
+    // the account that has agreed above, so consent is not what is refusing.
     const chat = (
-      await request("/admin/ai/conversations", { method: "POST", status: 201 })
+      await request("/admin/ai/conversations", {
+        method: "POST",
+        cookie: member,
+        status: 201,
+      })
     ).data;
     await request(`/admin/ai/conversations/${chat.id}/messages`, {
       method: "POST",
+      cookie: member,
       body: { text: "   " },
       status: 400,
     });
     await request(`/admin/ai/conversations/${chat.id}/messages`, {
       method: "POST",
+      cookie: member,
       body: { text: "问".repeat(1001) },
       status: 400,
     });
-    await request(`/admin/ai/conversations/${chat.id}`, { method: "DELETE" });
+    await request(`/admin/ai/conversations/${chat.id}`, {
+      method: "DELETE",
+      cookie: member,
+    });
     report.push("提问内容为空或过长时在调用模型前拦截");
   }
+
+  // The public pages decide whether to show the chat entry from a readable
+  // cookie, because the session cookie is HttpOnly. It must reach accounts
+  // that signed in before this feature existed, not only signIn logins.
+  const signIn = await fetch(`${base}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: base },
+    body: JSON.stringify({
+      username: env.ADMIN_USERNAME,
+      password: env.ADMIN_PASSWORD,
+    }),
+  });
+  const issued = signIn.headers.getSetCookie();
+  const hint = issued.find((c) => c.startsWith("bobo_family="));
+  assert.ok(hint, "登录时应下发 bobo_family");
+  assert.equal(/HttpOnly/i.test(hint), false, "前台 JS 必须能读到提示 cookie");
+  assert.match(hint, /SameSite=Strict/i);
+  const sessionOnly = issued
+    .find((c) => c.startsWith("bobo_session="))
+    .split(";")[0];
+
+  // An older session carrying only bobo_session gets the hint backfilled.
+  const backfill = await fetch(`${base}/api/profile`, {
+    headers: { Cookie: sessionOnly },
+  });
+  assert.ok(
+    backfill.headers.getSetCookie().some((c) => c.startsWith("bobo_family=1")),
+    "已登录但没有提示 cookie 时应补发",
+  );
+  // Already has it: nothing is re-sent.
+  const settled = await fetch(`${base}/api/profile`, {
+    headers: { Cookie: `${sessionOnly}; bobo_family=1` },
+  });
+  assert.equal(settled.headers.getSetCookie().length, 0);
+  // Left over without a session: cleared, so the entry disappears.
+  const stale = await fetch(`${base}/api/profile`, {
+    headers: { Cookie: "bobo_family=1" },
+  });
+  assert.ok(
+    stale.headers.getSetCookie().some((c) => /^bobo_family=;/.test(c)),
+    "没有会话时应清除提示 cookie",
+  );
+  // A visitor is given nothing at all.
+  const visitor = await fetch(`${base}/api/profile`);
+  assert.equal(visitor.headers.getSetCookie().length, 0);
+  report.push(
+    "前台聊天入口的提示 cookie：登录下发、老会话补发、失效清除、访客没有",
+  );
 
   console.log(JSON.stringify({ enabled: status.enabled, report }, null, 2));
 } finally {

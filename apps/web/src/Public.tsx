@@ -60,14 +60,17 @@ const signedIn = () => /(?:^|;\s*)bobo_family=1/.test(document.cookie);
 function Layout() {
   const { data: profile, error } = useData<Profile>("/profile");
   const loc = useLocation();
-  const [family] = useState(signedIn);
+  const [family, setFamily] = useState(signedIn);
   const [chat, setChat] = useState(false);
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [loc.pathname]);
   useEffect(() => {
     if (profile) document.title = profile.siteName;
-  }, [profile]);
+    // A session that predates the hint cookie receives it with this very
+    // response, so look again once the first request has come back.
+    if (profile && !family) setFamily(signedIn());
+  }, [profile, family]);
   return (
     <ProfileContext.Provider value={profile}>
       <div className={s.site}>

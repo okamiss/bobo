@@ -1300,6 +1300,25 @@ async function main() {
   );
   app.use((req: Request, res: Response, next: () => void) => {
     res.setHeader("Cache-Control", "no-store");
+    // Sessions last a week, so an account signed in before the chat existed
+    // would never receive the readable hint the public pages look for. Mirror
+    // it from the session cookie instead of only issuing it at login. No query
+    // is needed: it decides one button, and every endpoint still checks the
+    // session itself.
+    if (req.cookies?.bobo_session && req.cookies.bobo_family !== "1")
+      res.cookie("bobo_family", "1", {
+        httpOnly: false,
+        secure: cfg.secure,
+        sameSite: "strict",
+        path: "/",
+        maxAge: 7 * 86400000,
+      });
+    else if (!req.cookies?.bobo_session && req.cookies?.bobo_family)
+      res.clearCookie("bobo_family", {
+        path: "/",
+        secure: cfg.secure,
+        sameSite: "strict",
+      });
     if (
       !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
       req.headers.origin !== cfg.origin
