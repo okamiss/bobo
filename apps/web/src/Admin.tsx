@@ -1324,6 +1324,14 @@ function EntryEditor() {
             >
               AI 帮我写
             </Button>
+            {/* Kept next to its button so the two can never end up under
+                different conditions. The dialog renders in a portal. */}
+            <AiDraftModal
+              open={aiOpen}
+              onClose={() => setAiOpen(false)}
+              entry={form}
+              apply={change}
+            />
           </div>
           <Input.TextArea
             ref={text}
@@ -1559,12 +1567,6 @@ function EntryEditor() {
               >
                 管理标签
               </Button>
-              <AiDraftModal
-                open={aiOpen}
-                onClose={() => setAiOpen(false)}
-                entry={form}
-                apply={change}
-              />
               <Modal
                 title="管理标签"
                 open={tagsOpen}
