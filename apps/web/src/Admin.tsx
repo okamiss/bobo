@@ -639,19 +639,9 @@ function AdminEntries() {
         <Button
           type="primary"
           icon={<Plus size={17} />}
-          onClick={async () => {
-            try {
-              const e = await api(
-                "/admin/entries",
-                json("POST", { occurredOn: today() }),
-              );
-              nav(`/admin/entries/${e.id}`, {
-                state: { usePublishDefaults: true },
-              });
-            } catch (e: any) {
-              setMessage(e.message);
-            }
-          }}
+          // Opens an empty page; the story is only created once it has
+          // something in it.
+          onClick={() => nav("/admin/entries/new")}
         >
           写下新的一天
         </Button>
@@ -679,7 +669,8 @@ function AdminEntries() {
                   )}
                 </div>
                 <Link to={`/admin/entries/${e.id}`}>
-                  <h3>{e.title}</h3>
+                  {/* A story created by adding a photo may not be named yet. */}
+                  <h3>{e.title || "还没起名字"}</h3>
                   <small>
                     {e.occurredOn}
                     {postedTime(e) ? ` ${postedTime(e)}` : ""} ·{" "}
@@ -726,7 +717,7 @@ function AdminEntries() {
                     <Button
                       type="text"
                       danger
-                      aria-label={`删除 ${e.title}`}
+                      aria-label={`删除 ${e.title || "还没起名字的记录"}`}
                       icon={<Trash2 size={16} />}
                     />
                   </Popconfirm>
@@ -1068,12 +1059,35 @@ function AiDraftModal({
   );
 }
 
+// A story that has not been created yet. It lives here in the browser until
+// the first save, or until a photo is added, so simply opening the page never
+// leaves an empty record behind.
+const blankEntry = (user: AuthUser | null): Entry => ({
+  id: "",
+  title: "",
+  occurredOn: today(),
+  kind: "daily",
+  body: "",
+  tags: [],
+  status: "published",
+  visibility: "public",
+  milestone: false,
+  featured: false,
+  coverMediaId: null,
+  authorId: user?.id ?? null,
+  author: user ? { displayName: user.displayName } : null,
+  media: [],
+});
+
 function EntryEditor() {
   const { id } = useParams();
-  const location = useLocation();
+  const nav = useNavigate();
   const user = useContext(UserContext);
-  const usePublishDefaults = location.state?.usePublishDefaults === true;
-  const remote = useData<Entry>(`/admin/entries/${id}`);
+  const fresh = id === "new";
+  // Everything that talks to the server uses this, not the address bar: a new
+  // story gets its id partway through, when it is first written down.
+  const [entryId, setEntryId] = useState(fresh ? "" : id || "");
+  const remote = useData<Entry>(fresh ? "" : `/admin/entries/${id}`);
   const tagPool = useData<ManagedTag[]>("/admin/tags");
   const [tagsOpen, setTagsOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
@@ -1086,33 +1100,40 @@ function EntryEditor() {
     [tasks, setTasks] = useState<UploadTask[]>([]);
   const text = useRef<TextAreaRef>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  // A story created during this visit already holds the newest content, so a
+  // later fetch of it must not overwrite what is on screen.
+  const loaded = useRef("");
   useEffect(() => {
-    if (!remote.data || !id) return;
-    const loaded: Entry = usePublishDefaults
-      ? { ...remote.data, status: "published", visibility: "public" }
-      : remote.data;
-    setForm(loaded);
+    if (fresh) {
+      setForm((current) => current || blankEntry(user));
+      return;
+    }
+    if (!remote.data || !id || loaded.current === id) return;
+    loaded.current = id;
+    setForm(remote.data);
     const saved = drafts.read(id);
     const differs =
       saved &&
-      JSON.stringify(draftOf(withDraft(loaded, saved))) !==
-        JSON.stringify(draftOf(loaded));
+      JSON.stringify(draftOf(withDraft(remote.data, saved))) !==
+        JSON.stringify(draftOf(remote.data));
     if (differs) setDraft(saved);
     else drafts.clear(id);
-  }, [remote.data, usePublishDefaults, id]);
+  }, [remote.data, id, fresh, user]);
   // While a previous draft awaits a decision, do not overwrite it.
   const pending = useRef<Entry | null>(null);
   pending.current = dirty && !draft ? form : null;
   useEffect(() => {
-    if (!id || !pending.current) return;
+    // Nothing is kept for a story that has no id yet: there is no saved
+    // version to compare a recovered draft against.
+    if (!entryId || !pending.current) return;
     const timer = setTimeout(() => {
-      if (pending.current) drafts.write(id, pending.current);
+      if (pending.current) drafts.write(entryId, pending.current);
     }, 800);
     return () => clearTimeout(timer);
-  }, [id, form, dirty, draft]);
+  }, [entryId, form, dirty, draft]);
   useEffect(() => {
     const flush = () => {
-      if (id && pending.current) drafts.write(id, pending.current);
+      if (entryId && pending.current) drafts.write(entryId, pending.current);
     };
     const hidden = () => {
       if (document.visibilityState === "hidden") flush();
@@ -1123,16 +1144,33 @@ function EntryEditor() {
       window.removeEventListener("pagehide", flush);
       document.removeEventListener("visibilitychange", hidden);
     };
-  }, [id]);
+  }, [entryId]);
   useUnsaved(dirty || tasks.some((t) => !t.done && !t.error));
   const change = (v: Partial<Entry>) => {
     setForm((f) => (f ? { ...f, ...v } : f));
     setDirty(true);
     setMessage("");
   };
+  // Adding a photo needs somewhere to put it, so that is the other moment a
+  // story stops being just a page on screen.
+  async function ensureEntry(current: Entry) {
+    if (entryId) return entryId;
+    const created = await api<Entry>(
+      "/admin/entries",
+      json("POST", {
+        ...current,
+        title: current.title.trim(),
+        tags: current.tags.filter(Boolean),
+        media: undefined,
+      }),
+    );
+    loaded.current = created.id;
+    setEntryId(created.id);
+    return created.id;
+  }
   const refreshMedia = async () => {
     setDirty(true);
-    const latest = await api<Entry>(`/admin/entries/${id}`);
+    const latest = await api<Entry>(`/admin/entries/${entryId}`);
     setForm((f) =>
       f
         ? {
@@ -1150,11 +1188,18 @@ function EntryEditor() {
   };
   async function save() {
     if (!form) return;
+    // Checked here as well as on the server, so a story that cannot be saved
+    // is never created in the first place.
+    if (!form.title.trim()) {
+      setMessage("保存失败：给这一天起个名字吧");
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
+      const target = await ensureEntry(form);
       const saved = await api<Entry>(
-        `/admin/entries/${id}`,
+        `/admin/entries/${target}`,
         json("PUT", {
           ...form,
           tags: form.tags.filter(Boolean),
@@ -1163,7 +1208,8 @@ function EntryEditor() {
       );
       setForm(saved);
       setDirty(false);
-      if (id) drafts.clear(id);
+      drafts.clear(target);
+      if (fresh) nav(`/admin/entries/${target}`, { replace: true });
       setMessage("已保存这一天。");
     } catch (e: any) {
       setMessage(`保存失败：${e.message}`);
@@ -1180,10 +1226,13 @@ function EntryEditor() {
       patch({ error: undefined, progress: 0, done: false, converting: false });
       const mime = uploadType(task.file);
       if (task.id) await api(`/admin/media/${task.id}`, json("DELETE"));
+      // A photo is worth keeping, so this is where an unsaved story becomes a
+      // real one if it is not already.
+      const target = form ? await ensureEntry(form) : entryId;
       const permit = await api(
         "/admin/media/authorize",
         json("POST", {
-          entryId: id,
+          entryId: target,
           name: task.file.name,
           mime,
           size: task.file.size,
@@ -1279,7 +1328,7 @@ function EntryEditor() {
               <Button
                 size="small"
                 onClick={() => {
-                  if (id) drafts.clear(id);
+                  if (entryId) drafts.clear(entryId);
                   setDraft(null);
                 }}
               >
@@ -1304,6 +1353,7 @@ function EntryEditor() {
               className={s.titleInput}
               value={form.title}
               maxLength={150}
+              placeholder="例如：第一次剪毛"
               onChange={(e) => change({ title: e.target.value })}
             />
           </label>
@@ -1597,11 +1647,11 @@ function EntryEditor() {
                           }
                         : null,
                     );
-                    if (id) {
-                      const saved = drafts.read(id);
+                    if (entryId) {
+                      const saved = drafts.read(entryId);
                       if (saved)
                         drafts.write(
-                          id,
+                          entryId,
                           withDraft(form, {
                             ...saved,
                             entry: {

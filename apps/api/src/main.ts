@@ -866,16 +866,41 @@ class AdminController {
   @Get("entries/:id") entry(@Param("id") id: string) {
     return this.content.get(id, true);
   }
+  // The editor keeps a new story in the browser until there is something to
+  // keep, then creates it in one go, so opening the page no longer leaves an
+  // empty row behind. A body-less post still opens a blank draft, which the
+  // integration tests fill in with PUT.
   @Post("entries") async create(@Req() req: Request, @Body() body: unknown) {
-    const v = z.object({ occurredOn: date.optional() }).parse(body);
+    const v = entryInput.partial().parse(body ?? {});
     const admin = await currentAdmin(req);
-    return db.entry.create({
-      data: {
-        title: "未命名的日子",
-        authorId: admin.id,
-        occurredOn: v.occurredOn || shanghaiToday(),
-      },
+    const tags = [...new Set(v.tags || [])];
+    const published = v.status === "published";
+    const entry = await db.$transaction(async (tx) => {
+      const created = await tx.entry.create({
+        data: {
+          title: v.title?.trim() || "",
+          occurredOn: v.occurredOn || shanghaiToday(),
+          kind: v.kind ?? "daily",
+          body: v.body ?? "",
+          tags,
+          status: v.status ?? "draft",
+          visibility: v.visibility ?? "private",
+          milestone: v.milestone ?? false,
+          featured: v.featured ?? false,
+          // Media is attached by a later save; a brand new story has none.
+          coverMediaId: null,
+          authorId: admin.id,
+          publishedAt: published ? new Date() : null,
+        },
+      });
+      if (tags.length)
+        await tx.tag.createMany({
+          data: tags.map((name) => ({ name })),
+          skipDuplicates: true,
+        });
+      return created;
     });
+    return entry;
   }
   @Put("entries/:id") async save(
     @Req() req: Request,

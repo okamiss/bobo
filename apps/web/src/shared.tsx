@@ -46,6 +46,9 @@ export function useData<T>(path: string) {
     let alive = true;
     setError("");
     setData(null);
+    // An empty path means there is nothing to load yet, such as a story that
+    // has not been created.
+    if (!path) return;
     api<T>(path)
       .then((x) => {
         if (alive) setData(x);

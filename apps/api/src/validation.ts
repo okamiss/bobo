@@ -74,7 +74,11 @@ export const aiDraftOutput = z.object({
 export const tagCreateInput = z.object({ name: tagName });
 export const tagRenameInput = z.object({ name: tagName, newName: tagName });
 export const entryInput = z.object({
-  title: z.string().trim().min(1).max(150),
+  title: z
+    .string()
+    .trim()
+    .min(1, "给这一天起个名字吧")
+    .max(150, "标题最多 150 个字"),
   occurredOn: date,
   kind: z.enum(["daily", "event"]),
   body: z.string().max(50000),
