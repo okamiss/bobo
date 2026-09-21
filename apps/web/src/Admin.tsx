@@ -48,6 +48,7 @@ import {
   Users,
   KeyRound,
   ChartLine,
+  Sparkles,
   HeartPulse,
   Tags,
 } from "lucide-react";
@@ -64,6 +65,8 @@ import {
   type Media,
   type Listing,
   type ManagedTag,
+  type AiStatus,
+  type AiDraft,
   type Album,
   type AuthUser,
   type Account,
@@ -824,6 +827,244 @@ function withDraft(e: Entry, draft: Draft): Entry {
   };
 }
 
+// Writing help: the model only proposes text. Nothing is saved or published
+// until the family applies a piece and then saves the story themselves.
+function AiDraftModal({
+  open,
+  onClose,
+  entry,
+  apply,
+}: {
+  open: boolean;
+  onClose: () => void;
+  entry: Entry;
+  apply: (v: Partial<Entry>) => void;
+}) {
+  const photos = entry.media.filter((m) => m.kind === "image").slice(0, 4);
+  const [status, setStatus] = useState<AiStatus | null>(null);
+  const [hint, setHint] = useState("");
+  const [draft, setDraft] = useState<AiDraft | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState("");
+  useEffect(() => {
+    if (!open) return;
+    setError("");
+    api<AiStatus>("/admin/ai/status")
+      .then(setStatus)
+      .catch((e) => setError(e.message));
+  }, [open]);
+  const consent = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      setStatus(await api<AiStatus>("/admin/ai/consent", json("PUT")));
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const generate = async () => {
+    setBusy(true);
+    setError("");
+    setDone("");
+    try {
+      const result = await api<AiDraft>(
+        "/admin/ai/draft",
+        json("POST", {
+          mediaIds: photos.map((m) => m.id),
+          occurredOn: entry.occurredOn || null,
+          kind: entry.kind,
+          hint,
+        }),
+      );
+      setDraft(result);
+      setStatus((s) =>
+        s ? { ...s, remaining: Math.max(0, s.remaining - 1) } : s,
+      );
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const addTags = () => {
+    const merged = [...entry.tags];
+    for (const t of draft?.tags || [])
+      if (!merged.includes(t) && merged.length < 20) merged.push(t);
+    apply({ tags: merged });
+    setDone("标签已添加，记得保存。");
+  };
+  const useCaptions = () => {
+    const map = new Map(
+      (draft?.captions || [])
+        .filter((c) => c.caption)
+        .map((c) => [c.mediaId, c.caption]),
+    );
+    apply({
+      media: entry.media.map((m) =>
+        map.has(m.id) ? { ...m, caption: map.get(m.id)! } : m,
+      ),
+    });
+    setDone("照片说明已套用，记得保存。");
+  };
+  return (
+    <Modal
+      title="AI 帮我写"
+      open={open}
+      onCancel={onClose}
+      footer={<Button onClick={onClose}>关闭</Button>}
+      width={640}
+    >
+      {error ? <Alert type="error" showIcon message={error} /> : null}
+      {!status && !error ? <Status loading /> : null}
+      {status && !status.enabled ? (
+        <Alert
+          type="info"
+          showIcon
+          message="还没有配置 AI 服务"
+          description="请家庭管理员在服务器的 .env 里填写 DEEPSEEK_API_KEY，再重启网站。"
+        />
+      ) : null}
+      {status?.enabled && !status.consented ? (
+        <div className={s.aiPanel}>
+          <p>
+            用这个功能时，这篇记录的日期、你写的重点，以及选中照片的缩略图会发送给
+            DeepSeek 生成文字。不会发送你的账号、密码和整个数据库。
+          </p>
+          <p className={s.hint}>
+            生成的内容只是草稿，需要你逐项应用并手动保存，AI 不会自动改动网站。
+          </p>
+          <Button type="primary" loading={busy} onClick={consent}>
+            我知道了，开始使用
+          </Button>
+        </div>
+      ) : null}
+      {status?.enabled && status.consented ? (
+        <div className={s.aiPanel}>
+          {photos.length ? (
+            <div className={s.aiPhotos}>
+              {photos.map((m) => (
+                <MediaImage key={m.id} media={m} alt={m.caption || m.name} />
+              ))}
+            </div>
+          ) : (
+            <p className={s.hint}>
+              这篇还没有照片。也可以直接写，先上传照片会更贴近实际。
+            </p>
+          )}
+          <label>
+            想写的重点（可留空）
+            <Input
+              value={hint}
+              maxLength={200}
+              placeholder="例如：第一次剪毛，有点紧张但很乖"
+              onChange={(e) => setHint(e.target.value)}
+            />
+          </label>
+          <Space wrap>
+            <Button
+              type="primary"
+              icon={<Sparkles size={16} />}
+              loading={busy}
+              disabled={status.remaining <= 0}
+              onClick={generate}
+            >
+              {draft ? "再写一版" : "让啵啵写一段"}
+            </Button>
+            <span className={s.hint}>
+              今天还能用 {status.remaining} / {status.quota} 次
+            </span>
+          </Space>
+          {done ? <Alert type="success" showIcon message={done} /> : null}
+          {draft ? (
+            <div className={s.aiResult}>
+              <h4>标题</h4>
+              <Space direction="vertical" style={{ width: "100%" }}>
+                {draft.titles.map((t, i) => (
+                  <div className={s.aiRow} key={i}>
+                    <span>{t}</span>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        apply({ title: t });
+                        setDone("标题已填入，记得保存。");
+                      }}
+                    >
+                      用这个
+                    </Button>
+                  </div>
+                ))}
+              </Space>
+              <h4>正文</h4>
+              <Input.TextArea
+                value={draft.body}
+                readOnly
+                autoSize={{ minRows: 6, maxRows: 14 }}
+              />
+              <Space wrap>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    apply({ body: draft.body });
+                    setDone("正文已替换，记得保存。");
+                  }}
+                >
+                  替换正文
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    apply({
+                      body: entry.body
+                        ? `${entry.body}\n\n${draft.body}`
+                        : draft.body,
+                    });
+                    setDone("正文已追加，记得保存。");
+                  }}
+                >
+                  追加到正文末尾
+                </Button>
+              </Space>
+              {draft.tags.length ? (
+                <>
+                  <h4>标签</h4>
+                  <Space wrap>
+                    {draft.tags.map((t) => (
+                      <Tag key={t}>{t}</Tag>
+                    ))}
+                    <Button size="small" onClick={addTags}>
+                      添加这些标签
+                    </Button>
+                  </Space>
+                </>
+              ) : null}
+              {photos.length && draft.captions.some((c) => c.caption) ? (
+                <>
+                  <h4>照片说明</h4>
+                  <Space direction="vertical" style={{ width: "100%" }}>
+                    {draft.captions
+                      .filter((c) => c.caption)
+                      .map((c) => (
+                        <div className={s.aiRow} key={c.mediaId}>
+                          <span>{c.caption}</span>
+                        </div>
+                      ))}
+                    <Button size="small" onClick={useCaptions}>
+                      套用照片说明
+                    </Button>
+                  </Space>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </Modal>
+  );
+}
+
 function EntryEditor() {
   const { id } = useParams();
   const location = useLocation();
@@ -832,6 +1073,7 @@ function EntryEditor() {
   const remote = useData<Entry>(`/admin/entries/${id}`);
   const tagPool = useData<ManagedTag[]>("/admin/tags");
   const [tagsOpen, setTagsOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [form, setForm] = useState<Entry | null>(null),
     [draft, setDraft] = useState<Draft | null>(null),
     [dirty, setDirty] = useState(false),
@@ -1073,6 +1315,14 @@ function EntryEditor() {
               引用
             </Button>
             <span>支持简单文字排版</span>
+            <Button
+              type="text"
+              size="small"
+              icon={<Sparkles size={14} />}
+              onClick={() => setAiOpen(true)}
+            >
+              AI 帮我写
+            </Button>
           </div>
           <Input.TextArea
             ref={text}
@@ -1308,6 +1558,12 @@ function EntryEditor() {
               >
                 管理标签
               </Button>
+              <AiDraftModal
+                open={aiOpen}
+                onClose={() => setAiOpen(false)}
+                entry={form}
+                apply={change}
+              />
               <Modal
                 title="管理标签"
                 open={tagsOpen}

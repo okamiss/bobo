@@ -35,6 +35,7 @@ import { randomBytes } from "node:crypto";
 import { z, ZodError } from "zod";
 import { config, sign, checkPassword, hashPassword } from "./config";
 import { db, MediaService, mediaOrder } from "./media";
+import { AiService } from "./ai";
 import {
   entryInput,
   profileInput,
@@ -593,6 +594,7 @@ class AdminController {
   constructor(
     private readonly content: Content,
     private readonly media: MediaService,
+    private readonly ai: AiService,
   ) {}
   @Get("accounts") async accounts(@Req() req: Request) {
     await owner(req);
@@ -1187,6 +1189,20 @@ class AdminController {
       );
     return v;
   }
+  @Get("ai/status") async aiStatus(@Req() req: Request) {
+    return this.ai.status(await currentAdmin(req));
+  }
+  @Put("ai/consent") async aiConsent(@Req() req: Request) {
+    const admin = await currentAdmin(req);
+    const saved = await db.admin.update({
+      where: { id: admin.id },
+      data: { aiConsentAt: new Date() },
+    });
+    return this.ai.status(saved);
+  }
+  @Post("ai/draft") async aiDraft(@Req() req: Request, @Body() body: unknown) {
+    return this.ai.draft(await currentAdmin(req), body);
+  }
   @Get("audit-logs") async auditLogs(@Req() req: Request) {
     await owner(req);
     return db.auditLog.findMany({
@@ -1198,7 +1214,7 @@ class AdminController {
 }
 @Module({
   controllers: [PublicController, AdminController],
-  providers: [Content, MediaService, AdminGuard],
+  providers: [Content, MediaService, AdminGuard, AiService],
 })
 class AppModule {}
 async function main() {

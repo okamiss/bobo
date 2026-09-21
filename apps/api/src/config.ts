@@ -52,7 +52,22 @@ export function config() {
     secret: e.SESSION_SECRET!,
     root: e.MEDIA_ROOT || "/data/media",
     ossPrefix: ossPrefix(e.OSS_PREFIX ?? "bobo"),
+    ai: ai(),
   };
+}
+// Writing help is optional: a deployment without an API key keeps working and
+// simply reports the feature as off, so an older .env never blocks a release.
+export function ai() {
+  const e = process.env;
+  const key = e.DEEPSEEK_API_KEY?.trim();
+  if (!key) return null;
+  const base = (e.AI_BASE_URL || "https://api.deepseek.com").replace(
+    /\/+$/,
+    "",
+  );
+  if (!/^https?:\/\//.test(base))
+    throw new Error("AI_BASE_URL 必须以 http:// 或 https:// 开头");
+  return { key, base, model: e.AI_MODEL || "deepseek-flash" };
 }
 // Folder for this site's objects in a bucket that may be shared with other
 // projects; empty keeps objects at the bucket root.

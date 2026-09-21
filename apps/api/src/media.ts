@@ -62,6 +62,16 @@ export class MediaService {
       await pipeline(createReadStream(file), createWriteStream(this.path(key)));
     }
   }
+  // Reads a stored variant back into memory. Only used for the small thumbnails
+  // the writing help sends to the model.
+  async bytes(key: string) {
+    if (this.oss) {
+      const r = await this.oss.get(this.objectKey(key));
+      return r.content as Buffer;
+    }
+    const { readFile } = await import("node:fs/promises");
+    return await readFile(this.path(key));
+  }
   async remove(key: string) {
     if (this.oss) await this.oss.delete(this.objectKey(key));
     else await unlink(this.path(key)).catch(() => {});

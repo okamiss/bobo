@@ -14,7 +14,9 @@ const {
   checkPassword,
   config,
   ossPrefix,
+  ai,
 } = require("../apps/api/dist/config.js");
+const { read: readDraft, startOfToday } = require("../apps/api/dist/ai.js");
 const source = ts.transpileModule(
   readFileSync(new URL("../apps/web/src/lib.ts", import.meta.url), "utf8"),
   {
@@ -174,4 +176,69 @@ test("OSS prefix is normalized to a folder and rejects unsafe paths", () => {
   assert.equal(ossPrefix(""), "");
   assert.throws(() => ossPrefix("../bobo"), /OSS_PREFIX/);
   assert.throws(() => ossPrefix("bo bo"), /OSS_PREFIX/);
+});
+
+const draft = {
+  titles: ["剪毛的下午", "变身小帅哥"],
+  body: "今天带啵啵去剪毛。",
+  tags: ["美容"],
+  captions: ["刚洗完澡"],
+};
+test("AI writing help stays off until a key is configured", () => {
+  const before = { ...process.env };
+  delete process.env.DEEPSEEK_API_KEY;
+  assert.equal(ai(), null);
+  process.env.DEEPSEEK_API_KEY = "   ";
+  assert.equal(ai(), null, "a blank key counts as unconfigured");
+  process.env.DEEPSEEK_API_KEY = "key";
+  assert.deepEqual(ai(), {
+    key: "key",
+    base: "https://api.deepseek.com",
+    model: "deepseek-flash",
+  });
+  process.env.AI_BASE_URL = "http://stub:8791/";
+  process.env.AI_MODEL = "other-model";
+  assert.deepEqual(ai(), {
+    key: "key",
+    base: "http://stub:8791",
+    model: "other-model",
+  });
+  process.env.AI_BASE_URL = "stub:8791";
+  assert.throws(() => ai(), /AI_BASE_URL/);
+  process.env = before;
+});
+test("a model reply is only accepted when it is a usable draft", () => {
+  assert.equal(readDraft(JSON.stringify(draft)).success, true);
+  assert.deepEqual(readDraft(JSON.stringify(draft)).data.titles, draft.titles);
+  // DeepSeek documents that JSON mode can come back empty, and models like to
+  // wrap answers in code fences.
+  assert.equal(readDraft("").success, false);
+  assert.equal(readDraft("这不是 json").success, false);
+  const fenced = ["```json", JSON.stringify(draft), "```"].join("\n");
+  assert.equal(readDraft(fenced).success, true);
+  assert.equal(
+    readDraft(JSON.stringify({ ...draft, titles: [] })).success,
+    false,
+  );
+  assert.equal(
+    readDraft(JSON.stringify({ ...draft, body: "" })).success,
+    false,
+  );
+  assert.equal(
+    readDraft(JSON.stringify({ ...draft, titles: ["a".repeat(151)] })).success,
+    false,
+  );
+  assert.equal(
+    readDraft(JSON.stringify({ ...draft, tags: ["a".repeat(31)] })).success,
+    false,
+  );
+});
+test("the daily quota resets on the Shanghai day boundary", () => {
+  // 2026-09-22 01:00 in Shanghai is still 2026-09-21 in UTC.
+  const start = startOfToday(new Date("2026-09-21T17:00:00Z"));
+  assert.equal(start.toISOString(), "2026-09-21T16:00:00.000Z");
+  assert.equal(
+    startOfToday(new Date("2026-09-21T15:59:00Z")).toISOString(),
+    "2026-09-20T16:00:00.000Z",
+  );
 });

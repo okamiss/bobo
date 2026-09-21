@@ -24,6 +24,7 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 - `npm run test:growth`：成长曲线接口（用 2001 年的临时记录，结束时恢复原公开设置）。
 - `npm run test:health`：健康档案接口（用 2002 年的临时记录，结束时清理）。
 - `npm run test:tags`：标签管理的权限、固定标签新增、重命名合并、精确删除、全站同步、保留其他内容与操作记录（临时记录测试后清理）。
+- `npm run test:ai`：写作助手的权限、按账号同意、输入校验，以及未配置密钥时功能关闭且不影响网站；不消耗模型调用。
 - `npm run test:video`：视频上传与转码，需要宿主机 ffmpeg 带 libx265；不依赖存储模式。
 - `npm run test:integration`：媒体处理、私密隔离、相册等；需要宿主机有 ffmpeg。它假设 `STORAGE_DRIVER=local`（直接调用本地上传接口、校验本地签名 token），OSS 模式下会中途失败。
 - `npm run test:oss`：`STORAGE_DRIVER=oss` 时的真实 Bucket 联调。
@@ -51,11 +52,12 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 - **那年今日**：`GET /api/on-this-day?date=`（`Content.onThisDay`，`date` 可选、默认上海时区今天）返回同月同日的往年公开故事（`yearsAgo`）和一年内同日的故事（`monthsAgo`），往年优先，最多 6 条。
 - **成长曲线**：`Measurement` 表（`measuredOn` 唯一，`weight` kg / `height` cm 可空、至少一项，`note` 只给家人看）。管理接口 `/api/admin/growth`（增删改）和 `/api/admin/growth-visibility` 所有成员可用并记录操作；`GET /api/growth` 只在 `Profile.growthPublic` 为 true 时返回数据，且不含 `id`/`note`。前端 `shared.tsx` 的 `GrowthChart`（体重、肩高分成两张图，不用双 y 轴；线色 `#5f8c46` 经 dataviz 校验；宽度随容器，悬停与方向键查看）和 `GrowthTable`（数据表）在关于页与后台共用。
 - **健康档案**：`HealthRecord` 表记录 `vaccine` / `deworming` / `checkup` / `grooming`、本次日期、可空的下次时间和备注。仅提供受 `AdminGuard` 保护的 `/api/admin/health-records` 增删改查，没有公开接口；所有成员可维护并记录操作。前端以已到期、今天、7 天内、以后分级提醒，侧栏显示需要关注的数量。
+- **AI 写作助手**：`ai.ts` 的 `AiService`，编辑页「AI 帮我写」用。**可选功能**：`config().ai` 在没有 `DEEPSEEK_API_KEY` 时返回 `null`，接口报「还没有配置」而整站照常运行——服务器的 `.env` 不会被 `update-server.sh` 改写，所以新增的 AI 配置项一律要可选，不能写成必需项。默认模型 `deepseek-flash`（支持图片输入、Tool Calls 和 `json_object`），`AI_MODEL` / `AI_BASE_URL` 可覆盖，后者也是测试打桩的钩子。接口 `/api/admin/ai/status`、`/consent`、`/draft` 所有家人可用，同意状态存在 `Admin.aiConsentAt`。照片由前端只传 `mediaId`、服务端读 `<key>.thumb` 转 base64（绕开 1mb 的 JSON 上限，一次最多 4 张）。`json_object` 没有 schema 强制且官方承认可能返回空内容，所以用 `validation.ts` 的 `aiDraftOutput` 校验并自动重试一次，仍失败才报错；出站调用一律 `AbortSignal.timeout(90s)`（Nginx `proxy_read_timeout` 是 180s），失败按类型抛 `HttpException` 子类，否则全局过滤器会统一变成「服务暂时不可用」。配额按账号每天 20 次，记在 `AiUsage` 表并按上海时区计算，不能沿用 `failedAttempts`（那个按 IP 且只统计失败）。生成结果只回传给编辑器，应用时走 `change()`，不自动保存。
 
 ### 媒体管线（media.ts）
 
 1. **授权**：`authorize` 创建 `Media` 行，状态为 `pending`，并返回上传地址。`local` 驱动是 `PUT /api/admin/media/:id/upload`（写入 `<id>.staging`）；`oss` 驱动是预签名 PUT，目标为 `<前缀>staging/<id>`。
-2. **处理**：`complete` 先用 `updateMany` 把状态从 `pending` 改为 `processing` 作为并发锁，然后在 `process()` 中回读 staging 文件并按真实内容校验：图片用 sharp（JPEG/PNG/WebP/GIF）。多帧的 GIF 和 WebP 会保留动画：按 `meta.pages` 判断，用 `{ animated: true }` 读取并整段缩放，`宽 × 高 × 帧数` 超过 6000 万像素时报「动图太大」；动图输出是一条竖直帧带，所以存库的高度取 `info.pageHeight`，不是 `info.height`。视频（MP4 或 iPhone 的 MOV，≤180 秒）视频（MP4 或 iPhone 的 MOV，≤180 秒）用 ffprobe 检查，8 位 H.264 + AAC 的 MP4 原样保留，其他格式在 `transcode()` 中转为 H.264 MP4（长边 ≤1920、≤30fps，HLG/PQ 用 zscale+tonemap 转 SDR，失败再退回不做色调映射；输出色彩标签要用 `setparams` 写到帧上，编码器参数不生效）。转码通过 `transcoding` 队列串行执行。
+2. **处理**：`complete` 先用 `updateMany` 把状态从 `pending` 改为 `processing` 作为并发锁，然后在 `process()` 中回读 staging 文件并按真实内容校验：图片用 sharp（JPEG/PNG/WebP/GIF）。多帧的 GIF 和 WebP 会保留动画：按 `meta.pages` 判断，用 `{ animated: true }` 读取并整段缩放，`宽 × 高 × 帧数` 超过 6000 万像素时报「动图太大」；动图输出是一条竖直帧带，所以存库的高度取 `info.pageHeight`，不是 `info.height`。视频（MP4 或 iPhone 的 MOV，≤180 秒）用 ffprobe 检查，8 位 H.264 + AAC 的 MP4 原样保留，其他格式在 `transcode()` 中转为 H.264 MP4（长边 ≤1920、≤30fps，HLG/PQ 用 zscale+tonemap 转 SDR，失败再退回不做色调映射；输出色彩标签要用 `setparams` 写到帧上，编码器参数不生效）。转码通过 `transcoding` 队列串行执行。
 3. **写入**：生成 `<key>.original`（视频一律为 MP4，`mime`/`size` 更新为最终文件）、`<key>.thumb`（640px WebP）、`<key>.display`（仅图片，2000px WebP），状态改为 `ready`；失败则回到 `pending`，错误信息记在内存的 `failures` 中。
    - `complete` 最多等待 `MEDIA_WAIT_SECONDS`（默认 20，未在 Compose 中暴露，测试时可用 override 设为 0）；超时则返回 `state: "processing"`，处理继续在后台进行，前端 `waitForMedia()` 轮询 `GET /api/admin/media/:id/status`。
 4. **单实例假设**：API 启动时会把残留的 `uploading`/`processing` 重置为 `pending`。

@@ -103,6 +103,19 @@ export type Listing = {
   tags: string[];
 };
 export type ManagedTag = { name: string; count: number };
+export type AiStatus = {
+  enabled: boolean;
+  model: string;
+  consented: boolean;
+  remaining: number;
+  quota: number;
+};
+export type AiDraft = {
+  titles: string[];
+  body: string;
+  tags: string[];
+  captions: { mediaId: string; caption: string }[];
+};
 export async function api<T = any>(
   path: string,
   options: RequestInit = {},

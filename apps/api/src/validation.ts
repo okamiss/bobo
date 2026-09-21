@@ -43,6 +43,22 @@ export const tagName = z
   .trim()
   .min(1, "标签不能为空")
   .max(30, "标签最多 30 个字符");
+// What the editor asks the model for. Photos travel as ids: the server reads
+// the stored thumbnails itself, so nothing large passes through the JSON body.
+export const aiDraftInput = z.object({
+  mediaIds: z.array(z.string().uuid()).max(4, "一次最多参考 4 张照片"),
+  occurredOn: date.nullable(),
+  kind: z.enum(["daily", "event"]),
+  hint: z.string().trim().max(200),
+});
+// The model writes free-form JSON, so every field is checked before the editor
+// is allowed to show it.
+export const aiDraftOutput = z.object({
+  titles: z.array(z.string().trim().min(1).max(150)).min(1).max(3),
+  body: z.string().trim().min(1).max(50000),
+  tags: z.array(tagName).max(8),
+  captions: z.array(z.string().trim().max(500)).max(4),
+});
 export const tagCreateInput = z.object({ name: tagName });
 export const tagRenameInput = z.object({ name: tagName, newName: tagName });
 export const entryInput = z.object({

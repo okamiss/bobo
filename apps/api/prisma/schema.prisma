@@ -14,9 +14,28 @@ model Admin {
   passwordHash String
   role         String     @default("member")
   active       Boolean    @default(true)
+  // When this account agreed that writing help may send content to the model.
+  aiConsentAt  DateTime?
   sessions     Session[]
   entries      Entry[]
   auditLogs    AuditLog[]
+  aiUsage      AiUsage[]
+}
+
+// One row per writing-help call, used for the per-account daily quota and to
+// keep a record of what the feature costs.
+model AiUsage {
+  id        String   @id @default(uuid())
+  adminId   String
+  admin     Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  kind      String
+  model     String
+  tokensIn  Int      @default(0)
+  tokensOut Int      @default(0)
+  ms        Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([adminId, createdAt])
 }
 
 // Who changed shared site content (profile, covers, albums, growth, health) and how.

@@ -16,6 +16,7 @@
     "test:health": "node tests/health.integration.mjs",
     "test:tags": "node tests/tags.integration.mjs",
     "test:video": "node tests/video.integration.mjs",
+    "test:ai": "node tests/ai.integration.mjs",
     "test:oss": "node tests/oss.integration.mjs"
   },
   "engines": {

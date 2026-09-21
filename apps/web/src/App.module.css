@@ -1946,6 +1946,49 @@ hr {
   gap: 8px;
   padding-top: 10px;
 }
+.aiPanel {
+  display: grid;
+  gap: 14px;
+  padding-top: 12px;
+}
+.aiPanel p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.9;
+}
+.aiPhotos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.aiPhotos img {
+  width: 92px;
+  height: 92px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.aiResult {
+  display: grid;
+  gap: 10px;
+  border-top: 1px dashed var(--border);
+  padding-top: 14px;
+}
+.aiResult h4 {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #666e5c;
+}
+.aiRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #f8f8ef;
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.7;
+}
 .editorSettings {
   background: #f0f1e7;
   border: 1px solid #e1e5d5;
