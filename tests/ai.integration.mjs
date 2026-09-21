@@ -154,6 +154,69 @@ try {
     report.push("未配置 API key 时功能关闭，网站其余部分不受影响");
   }
 
+  // Conversations: private to the account that owns them. Sending a message
+  // would spend a model call, so only the plumbing around it is exercised.
+  await request("/admin/ai/conversations", { cookie: "", status: 401 });
+  const mine = (
+    await request("/admin/ai/conversations", { method: "POST", status: 201 })
+  ).data;
+  assert.equal(mine.title, "新的聊天");
+  const listed = (await request("/admin/ai/conversations")).data;
+  assert.equal(
+    listed.some((c) => c.id === mine.id),
+    true,
+  );
+  const opened = (await request(`/admin/ai/conversations/${mine.id}`)).data;
+  assert.deepEqual(opened.messages, []);
+
+  // The other family member sees neither the conversation nor its messages,
+  // and cannot delete it or post into it.
+  const theirs = (await request("/admin/ai/conversations", { cookie: member }))
+    .data;
+  assert.equal(
+    theirs.some((c) => c.id === mine.id),
+    false,
+  );
+  await request(`/admin/ai/conversations/${mine.id}`, {
+    cookie: member,
+    status: 404,
+  });
+  await request(`/admin/ai/conversations/${mine.id}`, {
+    method: "DELETE",
+    cookie: member,
+    status: 404,
+  });
+  await request(`/admin/ai/conversations/${mine.id}/messages`, {
+    method: "POST",
+    cookie: member,
+    body: { text: "偷看一下" },
+    status: status.enabled ? 404 : 503,
+  });
+  // Still there after the failed attempts.
+  await request(`/admin/ai/conversations/${mine.id}`);
+  await request(`/admin/ai/conversations/${mine.id}`, { method: "DELETE" });
+  await request(`/admin/ai/conversations/${mine.id}`, { status: 404 });
+  report.push("聊天会话按账号隔离，别人既读不到也删不掉");
+
+  if (status.enabled) {
+    // An empty or oversized question never reaches the model.
+    const chat = (
+      await request("/admin/ai/conversations", { method: "POST", status: 201 })
+    ).data;
+    await request(`/admin/ai/conversations/${chat.id}/messages`, {
+      method: "POST",
+      body: { text: "   " },
+      status: 400,
+    });
+    await request(`/admin/ai/conversations/${chat.id}/messages`, {
+      method: "POST",
+      body: { text: "问".repeat(1001) },
+      status: 400,
+    });
+    await request(`/admin/ai/conversations/${chat.id}`, { method: "DELETE" });
+    report.push("提问内容为空或过长时在调用模型前拦截");
+  }
+
   console.log(JSON.stringify({ enabled: status.enabled, report }, null, 2));
 } finally {
   if (memberId)

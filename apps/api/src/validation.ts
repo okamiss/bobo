@@ -51,6 +51,13 @@ export const aiDraftInput = z.object({
   kind: z.enum(["daily", "event"]),
   hint: z.string().trim().max(200),
 });
+export const aiMessageInput = z.object({
+  text: z
+    .string()
+    .trim()
+    .min(1, "想问点什么呢？")
+    .max(1000, "一次最多 1000 字"),
+});
 // The model writes free-form JSON, so every field is checked before the editor
 // is allowed to show it.
 export const aiDraftOutput = z.object({

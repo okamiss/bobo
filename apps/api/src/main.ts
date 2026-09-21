@@ -543,6 +543,16 @@ class PublicController {
       path: "/",
       maxAge: 7 * 86400000,
     });
+    // A readable hint so the public pages can show the family-only chat button
+    // without asking the server on every visit. It carries nothing secret and
+    // grants nothing: every endpoint still checks the session cookie.
+    res.cookie("bobo_family", "1", {
+      httpOnly: false,
+      secure: config().secure,
+      sameSite: "strict",
+      path: "/",
+      maxAge: 7 * 86400000,
+    });
     return authUser(admin);
   }
   @Get("auth/me") async me(@Req() req: Request) {
@@ -584,6 +594,11 @@ class PublicController {
       secure: config().secure,
       sameSite: "strict",
       httpOnly: true,
+    });
+    res.clearCookie("bobo_family", {
+      path: "/",
+      secure: config().secure,
+      sameSite: "strict",
     });
     return { ok: true };
   }
@@ -1202,6 +1217,37 @@ class AdminController {
   }
   @Post("ai/draft") async aiDraft(@Req() req: Request, @Body() body: unknown) {
     return this.ai.draft(await currentAdmin(req), body);
+  }
+  @Get("ai/conversations") async aiConversations(@Req() req: Request) {
+    return this.ai.conversations(await currentAdmin(req));
+  }
+  @Post("ai/conversations") async aiNewConversation(@Req() req: Request) {
+    return this.ai.newConversation(await currentAdmin(req));
+  }
+  @Delete("ai/conversations") async aiClearConversations(@Req() req: Request) {
+    return this.ai.clearConversations(await currentAdmin(req));
+  }
+  @Get("ai/conversations/:id") async aiConversation(
+    @Req() req: Request,
+    @Param("id") id: string,
+  ) {
+    idSchema.parse(id);
+    return this.ai.conversation(await currentAdmin(req), id);
+  }
+  @Delete("ai/conversations/:id") async aiRemoveConversation(
+    @Req() req: Request,
+    @Param("id") id: string,
+  ) {
+    idSchema.parse(id);
+    return this.ai.removeConversation(await currentAdmin(req), id);
+  }
+  @Post("ai/conversations/:id/messages") async aiMessage(
+    @Req() req: Request,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    idSchema.parse(id);
+    return this.ai.chat(await currentAdmin(req), id, body);
   }
   @Get("audit-logs") async auditLogs(@Req() req: Request) {
     await owner(req);

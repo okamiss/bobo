@@ -20,6 +20,7 @@ model Admin {
   entries      Entry[]
   auditLogs    AuditLog[]
   aiUsage      AiUsage[]
+  aiChats      AiConversation[]
 }
 
 // One row per writing-help call, used for the per-account daily quota and to
@@ -166,4 +167,35 @@ model AlbumItem {
   media    Media  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
 
   @@id([albumId, mediaId])
+}
+
+// Chat with the site. Conversations belong to one account: family members
+// share the same facts about Bobo but never see each other's chats.
+model AiConversation {
+  id        String      @id @default(uuid())
+  adminId   String
+  admin     Admin       @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  title     String      @default("新的聊天")
+  messages  AiMessage[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([adminId, updatedAt])
+}
+
+model AiMessage {
+  id             String         @id @default(uuid())
+  conversationId String
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  // Stories and records the answer was built from, as [{ id, title, ... }].
+  sources        Json           @default("[]")
+  model          String         @default("")
+  tokensIn       Int            @default(0)
+  tokensOut      Int            @default(0)
+  ms             Int            @default(0)
+  createdAt      DateTime       @default(now())
+
+  @@index([conversationId, createdAt])
 }

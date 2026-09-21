@@ -17,6 +17,7 @@ const {
   ai,
 } = require("../apps/api/dist/config.js");
 const { read: readDraft, startOfToday } = require("../apps/api/dist/ai.js");
+const { tools, runTool } = require("../apps/api/dist/retriever.js");
 const source = ts.transpileModule(
   readFileSync(new URL("../apps/web/src/lib.ts", import.meta.url), "utf8"),
   {
@@ -241,4 +242,33 @@ test("the daily quota resets on the Shanghai day boundary", () => {
     startOfToday(new Date("2026-09-21T15:59:00Z")).toISOString(),
     "2026-09-20T16:00:00.000Z",
   );
+});
+
+test("the chat can only reach the family journal, never the accounts", async () => {
+  const names = tools.map((t) => t.function.name).sort();
+  assert.deepEqual(names, [
+    "bobo_profile",
+    "get_story",
+    "growth_records",
+    "health_records",
+    "on_this_day",
+    "search_stories",
+  ]);
+  // Nothing about accounts, sessions, passwords or the audit log is offered.
+  const surface = JSON.stringify(tools);
+  for (const word of ["account", "session", "password", "audit", "admin"])
+    assert.equal(surface.includes(word), false, `工具不应暴露 ${word}`);
+});
+test("tool arguments from the model are validated before any query runs", async () => {
+  await assert.rejects(() => runTool("drop_database", {}), /未知的工具/);
+  await assert.rejects(() => runTool("get_story", { id: "not-a-uuid" }));
+  await assert.rejects(() =>
+    runTool("search_stories", {
+      keywords: ["一", "二", "三", "四", "五", "六", "七"],
+    }),
+  );
+  await assert.rejects(() => runTool("search_stories", { year: "26" }));
+  await assert.rejects(() => runTool("search_stories", { month: "13" }));
+  await assert.rejects(() => runTool("health_records", { kind: "everything" }));
+  await assert.rejects(() => runTool("growth_records", { limit: 999 }));
 });

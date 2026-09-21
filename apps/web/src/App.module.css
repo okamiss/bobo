@@ -3188,3 +3188,301 @@ hr {
     scroll-behavior: auto !important;
   }
 }
+/* Family-only chat. The bubble art is a placeholder: swap the image inside
+   .chatBubble and .chatAvatar when the real Bobo sticker is ready. */
+.chatBubble {
+  position: fixed;
+  right: 22px;
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  width: 62px;
+  height: 62px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: #fffdf7;
+  box-shadow: 2px 5px 16px #6a6b4326;
+  overflow: hidden;
+  cursor: pointer;
+  z-index: 60;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+.chatBubble:hover {
+  transform: translateY(-2px);
+  box-shadow: 2px 8px 20px #6a6b4333;
+}
+.chatBubble img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.chatBubbleOpen {
+  opacity: 0.45;
+}
+.chatPanel {
+  position: fixed;
+  right: 22px;
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  width: 400px;
+  max-width: calc(100vw - 44px);
+  height: min(560px, calc(100vh - 150px));
+  background: #fffdf7;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 2px 8px 28px #6a6b4330;
+  overflow: hidden;
+  z-index: 60;
+}
+.chatHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: #f8f8ef;
+}
+.chatAvatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.chatAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.chatTitle {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.chatTitle strong {
+  font-size: 14px;
+}
+.chatTitle small {
+  font-size: 11px;
+  color: #a6ac98;
+}
+.chatIcon {
+  border: 0;
+  background: transparent;
+  color: #7e8974;
+  padding: 6px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  flex-shrink: 0;
+}
+.chatIcon:hover {
+  background: #eaf0df;
+}
+.chatBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13px;
+  line-height: 1.85;
+}
+.chatEmpty,
+.chatError {
+  color: #a6ac98;
+  font-size: 12px;
+  line-height: 1.9;
+  margin: 0;
+}
+.chatError {
+  color: #b45844;
+}
+.chatNotice {
+  display: grid;
+  gap: 12px;
+  background: #f8f8ef;
+  border: 1px solid var(--border);
+  padding: 14px;
+  border-radius: 6px;
+}
+.chatNotice p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.9;
+}
+.chatPrimary {
+  border: 0;
+  background: var(--green, #6f835f);
+  color: #fffdf7;
+  padding: 9px 14px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  justify-self: start;
+}
+.chatMine,
+.chatTheirs {
+  max-width: 86%;
+  padding: 9px 12px;
+  border-radius: 10px;
+}
+.chatMine {
+  align-self: flex-end;
+  background: #eaf0df;
+  border-bottom-right-radius: 3px;
+}
+.chatTheirs {
+  align-self: flex-start;
+  background: #f4f4ea;
+  border-bottom-left-radius: 3px;
+}
+.chatMine p,
+.chatTheirs p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chatTyping {
+  color: #a6ac98;
+}
+.chatSources {
+  display: grid;
+  gap: 5px;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.chatSources small {
+  font-size: 10px;
+  color: #a6ac98;
+}
+.chatSource {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: #56634b;
+  text-decoration: none;
+}
+.chatSource:hover span {
+  text-decoration: underline;
+}
+.chatSource small {
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.chatItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chatItem > button:first-child {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: #f8f8ef;
+  padding: 9px 11px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.chatItem span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chatItem small {
+  font-size: 10px;
+  color: #a6ac98;
+  flex-shrink: 0;
+}
+.chatClear {
+  border: 0;
+  background: transparent;
+  color: #b45844;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 8px;
+  align-self: flex-start;
+}
+.chatInput {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+  background: #f8f8ef;
+}
+.chatInput textarea {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px 11px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.7;
+  max-height: 110px;
+  background: #fffdf7;
+  color: inherit;
+}
+.chatInput textarea:focus {
+  outline: 2px solid rgba(111, 131, 95, 0.25);
+  outline-offset: -1px;
+}
+.chatInput button {
+  border: 0;
+  background: var(--green, #6f835f);
+  color: #fffdf7;
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.chatInput button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+/* On a phone the chat takes the whole screen: a 400px panel floating over a
+   375px viewport would cover everything anyway, and the keyboard needs room. */
+@media (max-width: 600px) {
+  .chatBubble {
+    right: 16px;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    width: 54px;
+    height: 54px;
+  }
+  .chatPanel {
+    right: 0;
+    left: 0;
+    bottom: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+  }
+  .chatHead {
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  }
+  .chatIcon {
+    padding: 10px;
+  }
+  .chatInput textarea {
+    font-size: 16px;
+  }
+}

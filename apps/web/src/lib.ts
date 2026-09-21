@@ -109,6 +109,26 @@ export type AiStatus = {
   consented: boolean;
   remaining: number;
   quota: number;
+  chatRemaining: number;
+  chatQuota: number;
+};
+export type AiSource = {
+  id: string;
+  title: string;
+  occurredOn: string;
+  public: boolean;
+};
+export type AiChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  sources: AiSource[];
+  createdAt: string;
+};
+export type AiConversation = {
+  id: string;
+  title: string;
+  updatedAt: string;
 };
 export type AiDraft = {
   titles: string[];

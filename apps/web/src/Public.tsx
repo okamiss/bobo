@@ -1,4 +1,4 @@
-import { useEffect, useContext } from "react";
+import { useEffect, useContext, useState, lazy, Suspense } from "react";
 import {
   Routes,
   Route,
@@ -52,9 +52,16 @@ import {
   GrowthChart,
   GrowthTable,
 } from "./shared";
+// Only the family ever opens this, so it stays out of a visitor's first load.
+const Chat = lazy(() => import("./Chat"));
+// The session cookie is HttpOnly, so login is signalled by a second cookie
+// that carries nothing but "someone is signed in": it decides one button.
+const signedIn = () => /(?:^|;\s*)bobo_family=1/.test(document.cookie);
 function Layout() {
   const { data: profile, error } = useData<Profile>("/profile");
   const loc = useLocation();
+  const [family] = useState(signedIn);
+  const [chat, setChat] = useState(false);
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [loc.pathname]);
@@ -136,6 +143,22 @@ function Layout() {
           <small>用爱记录 · {profile?.siteName || "啵啵的小日子"}</small>
           <Link to="/admin">手账管理 ↗</Link>
         </footer>
+        {family && (
+          <>
+            {chat && (
+              <Suspense fallback={null}>
+                <Chat onClose={() => setChat(false)} />
+              </Suspense>
+            )}
+            <button
+              className={`${s.chatBubble} ${chat ? s.chatBubbleOpen : ""}`}
+              onClick={() => setChat((v) => !v)}
+              aria-label={chat ? "收起和啵啵的聊天" : "和啵啵聊天"}
+            >
+              <BoboIllustration />
+            </button>
+          </>
+        )}
       </div>
     </ProfileContext.Provider>
   );

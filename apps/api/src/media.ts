@@ -268,11 +268,7 @@ export class MediaService {
       await this.put(`${id}.original`, file, mime);
       await this.put(`${id}.thumb`, join(temp, "thumb"), "image/webp");
       if (m.kind === "image")
-        await this.put(
-          `${id}.display`,
-          join(temp, "display"),
-          "image/webp",
-        );
+        await this.put(`${id}.display`, join(temp, "display"), "image/webp");
       const result = await db.media.update({
         where: { id },
         data: {
