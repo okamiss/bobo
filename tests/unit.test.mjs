@@ -290,14 +290,14 @@ test("a story shows the clock time only for the day it is filed under", () => {
     occurredOn: "2026-09-21",
     publishedAt: "2026-09-21T06:32:07.000Z",
   };
-  assert.equal(postedTime(sameDay), "14:32:07");
+  assert.equal(postedTime(sameDay), "14:32");
   // Just before midnight Shanghai, still the same local day.
   assert.equal(
     postedTime({
       occurredOn: "2026-09-21",
       publishedAt: "2026-09-21T15:59:00.000Z",
     }),
-    "23:59:00",
+    "23:59",
   );
   // The same instant belongs to the next day in Shanghai.
   assert.equal(

@@ -186,12 +186,7 @@ export function postedTime(entry: {
     entry.occurredOn.split("-").reverse().join("/")
   )
     return "";
-  return shanghai({
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
+  return shanghai({ hour: "2-digit", minute: "2-digit", hour12: false });
 }
 export function daysSince(date: string, at = today()) {
   return Math.floor(
