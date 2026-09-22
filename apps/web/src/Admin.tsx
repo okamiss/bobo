@@ -43,6 +43,7 @@ import {
   Trash2,
   ArrowUp,
   ArrowDown,
+  ChevronsUp,
   Settings,
   Feather,
   Users,
@@ -76,6 +77,7 @@ import {
   type AuditEntry,
   healthReminder,
   postedTime,
+  moveToFront,
 } from "./lib";
 import s from "./App.module.css";
 import {
@@ -1494,11 +1496,25 @@ function EntryEditor() {
                   }
                 />
                 <div className={s.mediaActions}>
+                  {/* Stepping one place at a time is slow once a story has
+                      dozens of photos, so a picture can jump to the front. */}
+                  <Button
+                    type="text"
+                    size="small"
+                    disabled={!i}
+                    aria-label="放到最前"
+                    title="放到最前"
+                    icon={<ChevronsUp size={15} />}
+                    onClick={() =>
+                      change({ media: moveToFront(form.media, i) })
+                    }
+                  />
                   <Button
                     type="text"
                     size="small"
                     disabled={!i}
                     aria-label="向前移动"
+                    title="向前移动"
                     icon={<ArrowUp size={15} />}
                     onClick={() => {
                       const a = [...form.media];
@@ -1511,6 +1527,7 @@ function EntryEditor() {
                     size="small"
                     disabled={i === form.media.length - 1}
                     aria-label="向后移动"
+                    title="向后移动"
                     icon={<ArrowDown size={15} />}
                     onClick={() => {
                       const a = [...form.media];

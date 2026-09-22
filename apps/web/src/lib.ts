@@ -298,6 +298,12 @@ export function monthTicks(first: string, last: string, limit = 6) {
   const every = Math.ceil(ticks.length / Math.max(1, limit));
   return ticks.filter((_, i) => i % every === 0);
 }
+// Stepping a photo up one place at a time is slow once a story has dozens of
+// them, so one can be lifted straight to the front, the rest keeping order.
+export const moveToFront = <T>(list: T[], index: number) =>
+  index <= 0 || index >= list.length
+    ? list
+    : [list[index], ...list.filter((_, at) => at !== index)];
 export const coverOf = (e: Entry) =>
   e.media.find((m) => m.id === e.coverMediaId) || e.media[0];
 export const albumCover = (a: Album): Media | undefined =>

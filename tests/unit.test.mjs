@@ -36,6 +36,7 @@ const {
   monthTicks,
   healthReminder,
   postedTime,
+  moveToFront,
 } = await import(
   `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
 );
@@ -323,4 +324,17 @@ test("a story shows the clock time only for the day it is filed under", () => {
     postedTime({ occurredOn: "2026-09-21", publishedAt: "nonsense" }),
     "",
   );
+});
+
+test("a photo can be lifted to the front without disturbing the rest", () => {
+  const photos = ["a", "b", "c", "d"];
+  assert.deepEqual(moveToFront(photos, 2), ["c", "a", "b", "d"]);
+  assert.deepEqual(moveToFront(photos, 3), ["d", "a", "b", "c"]);
+  // Already first, or out of range: nothing moves.
+  assert.deepEqual(moveToFront(photos, 0), photos);
+  assert.deepEqual(moveToFront(photos, -1), photos);
+  assert.deepEqual(moveToFront(photos, 9), photos);
+  // The original list is left alone.
+  assert.deepEqual(photos, ["a", "b", "c", "d"]);
+  assert.deepEqual(moveToFront([], 0), []);
 });
