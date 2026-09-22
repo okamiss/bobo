@@ -94,7 +94,7 @@ Schema 在 `apps/api/prisma/schema.prisma`，迁移是已提交的 SQL 目录。
 - **生产发布**：推送到 `main` 后，阿里云 ACR（上海个人版，命名空间 `bobo-api`）的原生构建规则会分别用 `Dockerfile.api`、`Dockerfile.web` 构建 `bobo-api:latest` 和 `bobo-web:latest`。两个都构建成功后，在服务器 `/opt/bobo` 执行 `bash scripts/update-server.sh`：先备份，带重试地 `git pull`，然后重新执行拉取到的新版脚本，保留 `COMPOSE_FILE` 并叠加 `compose.registry.yaml`，拉取镜像后 `up --no-build`。
 - **服务器限制**：服务器访问不了 Docker Hub，不能在服务器上运行 `deploy.sh` 或 `docker compose up --build`。
 - **GitHub Actions**：`.github/workflows/publish-images.yml` 只是手动备用（GitHub 运行器连中国区 ACR 会超时）；ACR 个人版不接受 OCI attestation，所以其中 `provenance`/`sbom` 为 false。
-- 完整配置与排错记录见 `docs/ubuntu-acr-deployment.md`；`docs/verification.md` 记录实际验收结果。
+- 完整配置与排错记录见 `docs/ubuntu-acr-deployment.md`；`docs/verification.md` 记录实际验收结果；`docs/handoff.md` 是上一次会话结束时的进度、待人工验证项和下一步候选。
 - 两个 Dockerfile 的基础镜像都固定了摘要；`.sh` 脚本必须保持 LF（见 `.gitattributes`）。
 - **备份**：`scripts/backup.*` 用 `pg_dump` 导出到 `backups/`，`restore.*` 恢复到独立的 `bobo_restore` 库。数据库备份不含媒体文件。`docker compose down -v` 会删除数据库和媒体卷。
   - `backup.sh` 先写 `.partial` 再改名；保留最近 `BACKUP_KEEP`（默认 14）份；OSS 模式下通过 `docker compose exec -T api node dist/backup-upload.js <名称> < 文件` 把备份流式上传到 Bucket 的 `<前缀>backups/`（`src/backup-upload.ts`），上传失败只警告、不中断更新。
