@@ -37,6 +37,10 @@ const {
   healthReminder,
   postedTime,
   moveToFront,
+  mergeMedia,
+  withDraft,
+  draftOf,
+  afterSave,
 } = await import(
   `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
 );
@@ -337,4 +341,118 @@ test("a photo can be lifted to the front without disturbing the rest", () => {
   // The original list is left alone.
   assert.deepEqual(photos, ["a", "b", "c", "d"]);
   assert.deepEqual(moveToFront([], 0), []);
+});
+
+const photo = (id, caption = "") => ({
+  id,
+  entryId: "e1",
+  name: `${id}.jpg`,
+  mime: "image/jpeg",
+  kind: "image",
+  url: "",
+  thumb: "",
+  caption,
+});
+const story = (changes = {}) => ({
+  id: "e1",
+  title: "剪毛的下午",
+  occurredOn: "2026-09-21",
+  kind: "daily",
+  body: "正文",
+  tags: ["美容"],
+  status: "draft",
+  visibility: "private",
+  milestone: false,
+  featured: false,
+  publishedAt: null,
+  coverMediaId: null,
+  authorId: "a1",
+  author: { displayName: "啵爸" },
+  media: [],
+  ...changes,
+});
+
+test("photos refreshed after an upload keep their place and captions", () => {
+  const onScreen = [photo("a", "刚洗完"), photo("b")];
+  // The server has the same two plus the one just uploaded.
+  const fromServer = [photo("b"), photo("a"), photo("c")];
+  const merged = mergeMedia(onScreen, fromServer);
+  assert.deepEqual(
+    merged.map((m) => m.id),
+    ["a", "b", "c"],
+    "本地顺序保留，新照片排在最后",
+  );
+  assert.equal(merged[0].caption, "刚洗完", "未保存的说明不能被覆盖");
+  // A photo deleted from another device disappears here too.
+  assert.deepEqual(
+    mergeMedia(onScreen, [photo("b")]).map((m) => m.id),
+    ["b"],
+  );
+  assert.deepEqual(
+    mergeMedia([], [photo("a")]).map((m) => m.id),
+    ["a"],
+  );
+  assert.deepEqual(mergeMedia(onScreen, []), []);
+});
+
+test("a recovered draft keeps its words but not photos that are gone", () => {
+  const server = story({
+    title: "服务器上的标题",
+    media: [photo("a"), photo("c")],
+  });
+  const draft = {
+    savedAt: Date.now(),
+    entry: draftOf(
+      story({
+        title: "没保存的标题",
+        body: "没保存的正文",
+        coverMediaId: "b",
+        media: [photo("b", "已删除的照片"), photo("a", "我写的说明")],
+      }),
+    ),
+  };
+  const restored = withDraft(server, draft);
+  assert.equal(restored.title, "没保存的标题");
+  assert.equal(restored.body, "没保存的正文");
+  assert.deepEqual(
+    restored.media.map((m) => m.id),
+    ["a", "c"],
+    "草稿里已删除的照片丢弃，服务器上的新照片保留",
+  );
+  assert.equal(restored.media[0].caption, "我写的说明");
+  assert.equal(
+    restored.coverMediaId,
+    null,
+    "封面指向已删除的照片时退回服务器的值",
+  );
+  // A cover that still exists is kept.
+  assert.equal(
+    withDraft(server, {
+      savedAt: 1,
+      entry: draftOf(story({ coverMediaId: "a", media: [photo("a")] })),
+    }).coverMediaId,
+    "a",
+  );
+});
+
+test("words typed while a save is in flight are not thrown away", () => {
+  const sent = story({ title: "发出去时的标题" });
+  const saved = story({
+    title: "发出去时的标题",
+    publishedAt: "2026-09-21T06:00:00.000Z",
+    media: [photo("a")],
+  });
+  // Nothing changed meanwhile: the reply is taken as-is and the page is clean.
+  const quiet = afterSave(sent, saved, sent);
+  assert.equal(quiet.form.title, "发出去时的标题");
+  assert.equal(quiet.dirty, false);
+  // Still typing: keep those words, take what only the server knows.
+  const kept = afterSave(sent, saved, { ...sent, title: "又改了一版" });
+  assert.equal(kept.form.title, "又改了一版");
+  assert.equal(kept.form.publishedAt, "2026-09-21T06:00:00.000Z");
+  assert.deepEqual(
+    kept.form.media.map((m) => m.id),
+    ["a"],
+  );
+  assert.equal(kept.dirty, true, "还有没保存的内容，必须仍标记为未保存");
 });

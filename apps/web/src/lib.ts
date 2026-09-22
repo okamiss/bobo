@@ -300,6 +300,78 @@ export function monthTicks(first: string, last: string, limit = 6) {
 }
 // Stepping a photo up one place at a time is slow once a story has dozens of
 // them, so one can be lifted straight to the front, the rest keeping order.
+// What the editor keeps in this browser for a story that is not saved yet.
+export type Draft = {
+  savedAt: number;
+  entry: ReturnType<typeof draftOf>;
+};
+export const draftOf = (e: Entry) => ({
+  title: e.title,
+  occurredOn: e.occurredOn,
+  kind: e.kind,
+  body: e.body,
+  tags: e.tags,
+  status: e.status,
+  visibility: e.visibility,
+  milestone: e.milestone,
+  featured: e.featured,
+  coverMediaId: e.coverMediaId,
+  media: e.media.map((m) => ({ id: m.id, caption: m.caption })),
+});
+// Photos deleted since the draft was written are dropped, photos uploaded
+// since are kept at the end, and a cover pointing at a gone photo falls back
+// to what the server has.
+export function withDraft(e: Entry, draft: Draft): Entry {
+  const { media, coverMediaId, ...fields } = draft.entry;
+  const current = new Map(e.media.map((m) => [m.id, m]));
+  const kept = media.filter((m) => current.has(m.id));
+  return {
+    ...e,
+    ...fields,
+    coverMediaId:
+      coverMediaId === null || current.has(coverMediaId)
+        ? coverMediaId
+        : e.coverMediaId,
+    media: [
+      ...kept.map((m) => ({ ...current.get(m.id)!, caption: m.caption })),
+      ...e.media.filter((m) => !kept.some((k) => k.id === m.id)),
+    ],
+  };
+}
+// After an upload the server knows about photos this page has not seen. The
+// ones already on screen keep their place and their unsaved captions; photos
+// removed elsewhere disappear; new ones join the end.
+export function mergeMedia(current: Media[], latest: Media[]): Media[] {
+  const live = new Set(latest.map((m) => m.id));
+  const here = new Set(current.map((m) => m.id));
+  return [
+    ...current.filter((m) => live.has(m.id)),
+    ...latest.filter((m) => !here.has(m.id)),
+  ];
+}
+// What to show once a save comes back. The reply is the truth about what the
+// server now holds, but a save takes a moment and the family may have kept
+// typing: those words must not be thrown away, so only the fields the server
+// owns are taken and the text on screen stays.
+export function afterSave(
+  sent: Entry,
+  saved: Entry,
+  current: Entry | null,
+): { form: Entry; dirty: boolean } {
+  if (!current || current === sent) return { form: saved, dirty: false };
+  return {
+    form: {
+      ...current,
+      id: saved.id,
+      authorId: saved.authorId,
+      author: saved.author,
+      publishedAt: saved.publishedAt,
+      media: mergeMedia(current.media, saved.media),
+      uploads: saved.uploads,
+    },
+    dirty: true,
+  };
+}
 export const moveToFront = <T>(list: T[], index: number) =>
   index <= 0 || index >= list.length
     ? list

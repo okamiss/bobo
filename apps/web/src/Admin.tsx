@@ -78,6 +78,11 @@ import {
   healthReminder,
   postedTime,
   moveToFront,
+  draftOf,
+  withDraft,
+  mergeMedia,
+  afterSave,
+  type Draft,
 } from "./lib";
 import s from "./App.module.css";
 import {
@@ -761,24 +766,7 @@ type UploadTask = {
 
 // Unsaved editor changes are kept in this browser, so a refresh, a closed tab
 // or a phone reclaiming the page while picking photos does not lose them.
-type Draft = {
-  savedAt: number;
-  entry: ReturnType<typeof draftOf>;
-};
 const draftKey = (id: string) => `bobo:draft:${id}`;
-const draftOf = (e: Entry) => ({
-  title: e.title,
-  occurredOn: e.occurredOn,
-  kind: e.kind,
-  body: e.body,
-  tags: e.tags,
-  status: e.status,
-  visibility: e.visibility,
-  milestone: e.milestone,
-  featured: e.featured,
-  coverMediaId: e.coverMediaId,
-  media: e.media.map((m) => ({ id: m.id, caption: m.caption })),
-});
 const drafts = {
   read(id: string): Draft | null {
     try {
@@ -804,25 +792,6 @@ const drafts = {
     } catch {}
   },
 };
-// Media deleted since the draft was saved are dropped; newer uploads are kept.
-function withDraft(e: Entry, draft: Draft): Entry {
-  const { media, coverMediaId, ...fields } = draft.entry;
-  const current = new Map(e.media.map((m) => [m.id, m]));
-  const kept = media.filter((m) => current.has(m.id));
-  return {
-    ...e,
-    ...fields,
-    coverMediaId:
-      coverMediaId === null || current.has(coverMediaId)
-        ? coverMediaId
-        : e.coverMediaId,
-    media: [
-      ...kept.map((m) => ({ ...current.get(m.id)!, caption: m.caption })),
-      ...e.media.filter((m) => !kept.some((k) => k.id === m.id)),
-    ],
-  };
-}
-
 // Writing help: the model only proposes text. Nothing is saved or published
 // until the family applies a piece and then saves the story themselves.
 function AiDraftModal({
@@ -1125,9 +1094,16 @@ function EntryEditor() {
     if (differs) setDraft(saved);
     else drafts.clear(id);
   }, [remote.data, id, fresh, user]);
+  // Uploading and saving start from callbacks built earlier in this page's
+  // life. They read the story from here rather than from the value their
+  // closure captured, which may be several keystrokes out of date.
+  const formRef = useRef<Entry | null>(null);
   // While a previous draft awaits a decision, do not overwrite it.
   const pending = useRef<Entry | null>(null);
-  pending.current = dirty && !draft ? form : null;
+  useEffect(() => {
+    formRef.current = form;
+    pending.current = dirty && !draft ? form : null;
+  }, [form, dirty, draft]);
   useEffect(() => {
     // Nothing is kept for a story that has no id yet: there is no saved
     // version to compare a recovered draft against.
@@ -1181,6 +1157,9 @@ function EntryEditor() {
         }),
       )
         .then((created) => {
+          // All three move together: the ref for callbacks already running,
+          // the state for what is on screen, and loaded so that fetching this
+          // story back does not overwrite what has been typed since.
           idRef.current = created.id;
           loaded.current = created.id;
           setEntryId(created.id);
@@ -1199,12 +1178,7 @@ function EntryEditor() {
       f
         ? {
             ...f,
-            media: [
-              ...f.media.filter((m) => latest.media.some((x) => x.id === m.id)),
-              ...latest.media.filter(
-                (m) => !f.media.some((x) => x.id === m.id),
-              ),
-            ],
+            media: mergeMedia(f.media, latest.media),
             uploads: latest.uploads,
           }
         : f,
@@ -1221,18 +1195,21 @@ function EntryEditor() {
     setBusy(true);
     setMessage("");
     try {
-      const target = await ensureEntry(form);
+      const sent = form;
+      const target = await ensureEntry(sent);
       const saved = await api<Entry>(
         `/admin/entries/${target}`,
         json("PUT", {
-          ...form,
-          tags: form.tags.filter(Boolean),
-          media: form.media.map((m) => ({ id: m.id, caption: m.caption })),
+          ...sent,
+          tags: sent.tags.filter(Boolean),
+          media: sent.media.map((m) => ({ id: m.id, caption: m.caption })),
         }),
       );
-      setForm(saved);
-      setDirty(false);
-      drafts.clear(target);
+      // Anything typed while the request was in flight is kept.
+      const next = afterSave(sent, saved, formRef.current);
+      setForm(next.form);
+      setDirty(next.dirty);
+      if (!next.dirty) drafts.clear(target);
       if (fresh) nav(`/admin/entries/${target}`, { replace: true });
       setMessage("已保存这一天。");
     } catch (e: any) {
@@ -1252,7 +1229,8 @@ function EntryEditor() {
       if (task.id) await api(`/admin/media/${task.id}`, json("DELETE"));
       // A photo is worth keeping, so this is where an unsaved story becomes a
       // real one if it is not already.
-      const target = form ? await ensureEntry(form) : idRef.current;
+      const current = formRef.current;
+      const target = current ? await ensureEntry(current) : idRef.current;
       const permit = await api(
         "/admin/media/authorize",
         json("POST", {
@@ -1401,13 +1379,16 @@ function EntryEditor() {
               AI 帮我写
             </Button>
             {/* Kept next to its button so the two can never end up under
-                different conditions. The dialog renders in a portal. */}
-            <AiDraftModal
-              open={aiOpen}
-              onClose={() => setAiOpen(false)}
-              entry={form}
-              apply={change}
-            />
+                different conditions, and only built once asked for, so its
+                own rendering can never break the editor around it. */}
+            {aiOpen && (
+              <AiDraftModal
+                open
+                onClose={() => setAiOpen(false)}
+                entry={form}
+                apply={change}
+              />
+            )}
           </div>
           <Input.TextArea
             ref={text}
