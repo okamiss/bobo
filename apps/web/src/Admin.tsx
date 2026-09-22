@@ -1427,6 +1427,10 @@ function EntryEditor() {
             ref={text}
             className={s.bodyEditor}
             value={form.body}
+            // Ant Design writes the height inline, which is the only way it
+            // reliably reaches the textarea itself. It also means the box
+            // grows with the story instead of scrolling inside a fixed frame.
+            autoSize={{ minRows: 10, maxRows: 30 }}
             onChange={(e) => change({ body: e.target.value })}
             placeholder="今天的啵啵，发生了什么有趣的小事？"
           />

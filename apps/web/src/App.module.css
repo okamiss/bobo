@@ -2033,9 +2033,9 @@ hr {
   font-size: 10px;
   color: #a6ac98;
 }
+/* The height comes from autoSize in the editor, not from here: this rule
+   never reached the textarea element itself. */
 .bodyEditor {
-  height: 310px;
-  min-height: 200px;
   border-radius: 0 0 5px 5px;
   background: transparent;
   padding: 18px;
