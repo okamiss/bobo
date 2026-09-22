@@ -23,6 +23,7 @@ npx prettier --write <改动的文件>   # 没有 lint 脚本；只格式化自�
 - `npm run test:memories`：「那年今日」接口（用 2088-2090 年的临时故事，不受真实数据和存储模式影响）。
 - `npm run test:growth`：成长曲线接口（用 2001 年的临时记录，结束时恢复原公开设置）。
 - `npm run test:health`：健康档案接口（用 2002 年的临时记录，结束时清理）。
+- `npm run test:entries`：新建记录的流程——未写标题先加照片会建成**私密草稿**且不进前台、保存时标题必填、有未完成上传时拒绝发布、空 body 创建仍可用（2086 年临时记录，只授权不真上传，不依赖存储模式）。
 - `npm run test:ordering`：同一天多篇的排序、上一篇/下一篇与时间线一致、草稿位置（用 2089 年临时记录，不依赖存储模式）。
 - `npm run test:tags`：标签管理的权限、固定标签新增、重命名合并、精确删除、全站同步、保留其他内容与操作记录（临时记录测试后清理）。
 - `npm run test:ai`：写作助手与聊天的权限、按账号同意、会话隔离、输入校验，以及未配置密钥时功能关闭且不影响网站；不消耗模型调用。
@@ -78,7 +79,7 @@ Schema 在 `apps/api/prisma/schema.prisma`，迁移是已提交的 SQL 目录。
 - `App.tsx` 懒加载两套界面：`/admin/*` → `Admin.tsx`（Ant Design，`ConfigProvider` 自定义主题），其余路由 → `Public.tsx`。样式集中在 `App.module.css`。
 - `lib.ts`：类型定义、`api()`（失败时抛出带服务端 `message` 的 Error，界面直接展示）、日期与年龄计算。首页纪念日由纯函数 `anniversaries(profile, today)` 在前端计算，满 N 个月的日子与 `age()` 的判定一致（月份没有对应日期时顺延到下月 1 日）；`tests/unit.test.mjs` 会转译 `lib.ts` 直接测试这些函数。`shared.tsx`：`useData(path)` 数据钩子、`ProfileContext`、`StoryView`、`Lightbox`、`useUnsaved`。图片预览按需加载 `ImagePreview.tsx`，使用 Ant Design `Image.PreviewGroup` 提供多图切换、缩放、拖动、旋转、翻转和复位；视频继续使用独立的原生播放器 Lightbox。
 - 正文不渲染 HTML 或 Markdown，`BodyText` 只识别以 `## `、`- `、`> ` 开头的行。
-- **新建记录**：`/admin/entries/new` 只在浏览器里放一张空表单，`POST /api/admin/entries` 要到第一次保存或第一次加照片时才发（`EntryEditor.ensureEntry()`），所以打开页面不再留下空记录；创建接口接受 `entryInput.partial()`，不再写入「未命名的日子」默认标题，标题为空由前端和 zod 两头拦。创建完成后用 `replace` 把地址换成真实 id，`loaded` ref 保证随后的 GET 不会覆盖本地内容。
+- **新建记录**：`/admin/entries/new` 只在浏览器里放一张空表单，`POST /api/admin/entries` 要到第一次保存或第一次加照片时才发（`EntryEditor.ensureEntry()`），所以打开页面不再留下空记录；创建接口接受 `entryInput.partial()` 但**把 title 覆盖成允许空串**（`.partial()` 只是让键可选，前端传 `title: ""` 时 `.min(1)` 照样会报错，加照片起头的记录就是没名字），保存用的 PUT 仍然必填；`ensureEntry()` 故意不发 `status`/`visibility`，创建一律落成私密草稿，**加照片不能把没写完的记录发到前台**，真正的状态由随后的保存决定。创建完成后用 `replace` 把地址换成真实 id，`loaded` ref 保证随后的 GET 不会覆盖本地内容。
 - `EntryEditor` 把未保存的修改自动写入 `localStorage`（键 `bobo:draft:<entryId>`，`draftOf` 决定保存哪些字段）。打开记录时若草稿与服务器内容不同，提示恢复或丢弃；保存、丢弃、删除记录时清除。给记录新增可编辑字段时，要同步加进 `draftOf`。
 
 ## 部署与发布

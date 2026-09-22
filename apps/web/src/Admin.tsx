@@ -1157,13 +1157,19 @@ function EntryEditor() {
   // story stops being just a page on screen.
   async function ensureEntry(current: Entry) {
     if (entryId) return entryId;
+    // Deliberately without status and visibility, so this always starts as a
+    // private draft: adding a photo must never put an unwritten story on the
+    // public site. The save that follows sets what the family chose.
     const created = await api<Entry>(
       "/admin/entries",
       json("POST", {
-        ...current,
         title: current.title.trim(),
+        occurredOn: current.occurredOn,
+        kind: current.kind,
+        body: current.body,
         tags: current.tags.filter(Boolean),
-        media: undefined,
+        milestone: current.milestone,
+        featured: current.featured,
       }),
     );
     loaded.current = created.id;

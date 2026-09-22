@@ -871,7 +871,12 @@ class AdminController {
   // empty row behind. A body-less post still opens a blank draft, which the
   // integration tests fill in with PUT.
   @Post("entries") async create(@Req() req: Request, @Body() body: unknown) {
-    const v = entryInput.partial().parse(body ?? {});
+    // A story started by adding a photo has no name yet, so an empty title is
+    // allowed here; saving it later still insists on one.
+    const v = entryInput
+      .partial()
+      .extend({ title: z.string().trim().max(150).optional() })
+      .parse(body ?? {});
     const admin = await currentAdmin(req);
     const tags = [...new Set(v.tags || [])];
     const published = v.status === "published";
