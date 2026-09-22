@@ -1891,6 +1891,10 @@ function AlbumEditor() {
   };
   if (remote.error) return <Status error={remote.error} />;
   if (!form) return <Status loading />;
+  // Everything in the library that is not already in this album.
+  const available = (library.data || []).filter(
+    (m) => !form.items.some((x) => x.id === m.id),
+  );
   return (
     <>
       <Link className={s.textLink} to="/admin/albums">
@@ -2015,23 +2019,30 @@ function AlbumEditor() {
             </div>
           ))}
         </div>
-        <h3>从媒体库添加</h3>
+        <h3>
+          从媒体库添加
+          {available.length ? ` · ${available.length} 个可选` : ""}
+        </h3>
         {library.error ? (
           <Status error={library.error} />
+        ) : !available.length ? (
+          <p className={s.hint}>
+            {library.data
+              ? "媒体库里的照片都已经在这本相册里了。"
+              : "正在读取媒体库…"}
+          </p>
         ) : (
           <div className={s.library}>
-            {library.data
-              ?.filter((m) => !form.items.some((x) => x.id === m.id))
-              .map((m) => (
-                <Button
-                  key={m.id}
-                  onClick={() => update({ items: [...form.items, m] })}
-                  title={`添加 ${m.name}`}
-                >
-                  <MediaImage media={m} alt={m.name} />
-                  <Plus size={18} />
-                </Button>
-              ))}
+            {available.map((m) => (
+              <Button
+                key={m.id}
+                onClick={() => update({ items: [...form.items, m] })}
+                title={`添加 ${m.name}`}
+              >
+                <MediaImage media={m} alt={m.name} />
+                <Plus size={18} />
+              </Button>
+            ))}
           </div>
         )}
       </div>
@@ -3079,7 +3090,7 @@ function CoverPicker({
       </div>
       {uploaded.length ? (
         <>
-          <h4>上传的图片</h4>
+          <h4>上传的图片 · {uploaded.length} 张</h4>
           <div className={s.library}>
             {uploaded.map((m) => (
               <div className={s.libraryTile} key={m.id}>
@@ -3108,7 +3119,7 @@ function CoverPicker({
           </div>
         </>
       ) : null}
-      <h4>公开故事中的照片</h4>
+      <h4>公开故事中的照片{stories.length ? ` · ${stories.length} 张` : ""}</h4>
       {stories.length ? (
         <div className={s.library}>{stories.map(tile)}</div>
       ) : (
