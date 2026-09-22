@@ -1089,6 +1089,10 @@ function EntryEditor() {
   // Everything that talks to the server uses this, not the address bar: a new
   // story gets its id partway through, when it is first written down.
   const [entryId, setEntryId] = useState(fresh ? "" : id || "");
+  // The id as a ref too: uploads run in callbacks created before the story
+  // existed, and state set halfway through never reaches those closures.
+  const idRef = useRef(fresh ? "" : id || "");
+  const creating = useRef<Promise<string> | null>(null);
   const remote = useData<Entry>(fresh ? "" : `/admin/entries/${id}`);
   const tagPool = useData<ManagedTag[]>("/admin/tags");
   const [tagsOpen, setTagsOpen] = useState(false);
@@ -1156,29 +1160,41 @@ function EntryEditor() {
   // Adding a photo needs somewhere to put it, so that is the other moment a
   // story stops being just a page on screen.
   async function ensureEntry(current: Entry) {
-    if (entryId) return entryId;
-    // Deliberately without status and visibility, so this always starts as a
-    // private draft: adding a photo must never put an unwritten story on the
-    // public site. The save that follows sets what the family chose.
-    const created = await api<Entry>(
-      "/admin/entries",
-      json("POST", {
-        title: current.title.trim(),
-        occurredOn: current.occurredOn,
-        kind: current.kind,
-        body: current.body,
-        tags: current.tags.filter(Boolean),
-        milestone: current.milestone,
-        featured: current.featured,
-      }),
-    );
-    loaded.current = created.id;
-    setEntryId(created.id);
-    return created.id;
+    if (idRef.current) return idRef.current;
+    // Several photos are uploaded one after another from the same callback, so
+    // the first one's creation is shared rather than repeated: otherwise each
+    // photo would start a story of its own.
+    if (!creating.current)
+      // Deliberately without status and visibility, so this always starts as a
+      // private draft: adding a photo must never put an unwritten story on the
+      // public site. The save that follows sets what the family chose.
+      creating.current = api<Entry>(
+        "/admin/entries",
+        json("POST", {
+          title: current.title.trim(),
+          occurredOn: current.occurredOn,
+          kind: current.kind,
+          body: current.body,
+          tags: current.tags.filter(Boolean),
+          milestone: current.milestone,
+          featured: current.featured,
+        }),
+      )
+        .then((created) => {
+          idRef.current = created.id;
+          loaded.current = created.id;
+          setEntryId(created.id);
+          return created.id;
+        })
+        .finally(() => {
+          creating.current = null;
+        });
+    return creating.current;
   }
-  const refreshMedia = async () => {
+  const refreshMedia = async (target = idRef.current) => {
+    if (!target) return;
     setDirty(true);
-    const latest = await api<Entry>(`/admin/entries/${entryId}`);
+    const latest = await api<Entry>(`/admin/entries/${target}`);
     setForm((f) =>
       f
         ? {
@@ -1236,7 +1252,7 @@ function EntryEditor() {
       if (task.id) await api(`/admin/media/${task.id}`, json("DELETE"));
       // A photo is worth keeping, so this is where an unsaved story becomes a
       // real one if it is not already.
-      const target = form ? await ensureEntry(form) : entryId;
+      const target = form ? await ensureEntry(form) : idRef.current;
       const permit = await api(
         "/admin/media/authorize",
         json("POST", {
@@ -1260,7 +1276,7 @@ function EntryEditor() {
         await waitForMedia(permit.id);
       }
       patch({ done: true, converting: false });
-      await refreshMedia();
+      await refreshMedia(target);
     } catch (e: any) {
       patch({ error: e.message });
     }
