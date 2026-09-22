@@ -637,6 +637,16 @@ function AdminEntries() {
     `/admin/entries?limit=12&page=${q.get("page") || 1}`,
   );
   const [message, setMessage] = useState("");
+  // The editor sends the family back here after a save; say so, then drop the
+  // note from the history entry so a refresh does not repeat it.
+  const location = useLocation();
+  const [saved, setSaved] = useState<string>(location.state?.saved || "");
+  useEffect(() => {
+    if (location.state?.saved) {
+      setSaved(location.state.saved);
+      nav(`${location.pathname}${location.search}`, { replace: true });
+    }
+  }, [location, nav]);
   return (
     <>
       <AdminHeading
@@ -653,6 +663,15 @@ function AdminEntries() {
           写下新的一天
         </Button>
       </AdminHeading>
+      {saved ? (
+        <Alert
+          type="success"
+          showIcon
+          closable
+          message={saved}
+          onClose={() => setSaved("")}
+        />
+      ) : null}
       {message ? <Alert type="error" showIcon message={message} /> : null}
       {error ? (
         <Status error={error} />
@@ -1128,10 +1147,22 @@ function EntryEditor() {
     };
   }, [entryId]);
   useUnsaved(dirty || tasks.some((t) => !t.done && !t.error));
+  // Saving takes the family back to the list, but the guard above reads dirty
+  // as it was when the render began: leaving in the same breath as the save
+  // would ask them to confirm abandoning the changes they just saved. So the
+  // trip waits for a render in which there is nothing left unsaved.
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    if (leaving && !dirty)
+      nav("/admin", { state: { saved: "已保存这一天。" } });
+  }, [leaving, dirty, nav]);
   const change = (v: Partial<Entry>) => {
     setForm((f) => (f ? { ...f, ...v } : f));
     setDirty(true);
     setMessage("");
+    // Typing again cancels a pending trip back, so the page never leaves
+    // under someone who has started writing more.
+    setLeaving(false);
   };
   // Adding a photo needs somewhere to put it, so that is the other moment a
   // story stops being just a page on screen.
@@ -1210,8 +1241,10 @@ function EntryEditor() {
       setForm(next.form);
       setDirty(next.dirty);
       if (!next.dirty) drafts.clear(target);
-      if (fresh) nav(`/admin/entries/${target}`, { replace: true });
       setMessage("已保存这一天。");
+      // Anything typed while the save was in flight keeps the page open, so
+      // those words are not carried off the screen unsaved.
+      setLeaving(!next.dirty);
     } catch (e: any) {
       setMessage(`保存失败：${e.message}`);
     } finally {
